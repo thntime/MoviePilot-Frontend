@@ -66,6 +66,7 @@ const savingPriority = ref(false)
 // 筛选相关
 const filterMenu = ref(false)
 const filterOption = ref('all') // all, active, inactive, connected, slow, failed, unknown
+const kindFilter = ref<'all' | 'pt' | 'cd'>('all')
 // 原生操作从系统顶栏发起，仍打开同一份 HTML 筛选菜单。
 const siteFilterActivator = computed(() =>
   nativeChromeActive.value ? '[data-native-menu-anchor][data-menu-activator="site-filter-btn"]' : undefined,
@@ -82,14 +83,24 @@ const filterOptions = computed(() => [
   { value: 'unknown', label: t('site.connectionUnknown'), icon: 'mdi-help-circle', color: 'secondary' },
 ])
 
+// 站点类型筛选选项
+const kindFilterOptions = computed<{ value: 'all' | 'pt' | 'cd'; label: string; icon: string }[]>(() => [
+  { value: 'all', label: t('common.all'), icon: 'mdi-shape-outline' },
+  { value: 'pt', label: t('site.kindOptions.pt'), icon: 'mdi-account-key-outline' },
+  { value: 'cd', label: t('site.kindOptions.cd'), icon: 'mdi-cloud-outline' },
+])
+
+// 是否存在任一筛选条件
+const hasActiveFilter = computed(() => filterOption.value !== 'all' || kindFilter.value !== 'all')
+
 // 筛选后的站点列表
 const filteredSiteList = computed(() => {
-  if (filterOption.value === 'all') {
-    return siteList.value
-  }
   return siteList.value.filter(site => {
+    if (kindFilter.value !== 'all' && (site.kind ?? 'pt') !== kindFilter.value) {
+      return false
+    }
     if (filterOption.value === 'active') {
-      return site.is_active
+      return !!site.is_active
     } else if (filterOption.value === 'inactive') {
       return !site.is_active
     } else if (['connected', 'slow', 'failed', 'unknown'].includes(filterOption.value)) {
@@ -103,10 +114,10 @@ const filteredSiteList = computed(() => {
 // 用于拖拽排序的列表
 const draggableSiteList = computed({
   get() {
-    return filterOption.value === 'all' ? siteList.value : filteredSiteList.value
+    return hasActiveFilter.value ? filteredSiteList.value : siteList.value
   },
   set(value) {
-    if (filterOption.value === 'all') {
+    if (!hasActiveFilter.value) {
       siteList.value = value
     }
   },
@@ -124,7 +135,7 @@ const siteUserDataMap = computed<Record<string, SiteUserData | undefined>>(() =>
   return map
 })
 
-const canDragSort = computed(() => sortMode.value && filterOption.value === 'all')
+const canDragSort = computed(() => sortMode.value && filterOption.value === 'all' && kindFilter.value === 'all')
 const shouldVirtualizeList = computed(() => !canDragSort.value)
 
 // 当前筛选选项的显示信息
@@ -211,7 +222,7 @@ function getConnectionStatus(domain: string) {
 // 保存站点排序
 async function savaSitesPriority() {
   // 只在显示全部站点时允许排序
-  if (filterOption.value !== 'all' || savingPriority.value) {
+  if (hasActiveFilter.value || savingPriority.value) {
     return
   }
 
@@ -255,6 +266,12 @@ function onSiteSave() {
 // 选择筛选选项
 function selectFilter(value: string) {
   filterOption.value = value
+  filterMenu.value = false
+}
+
+// 选择站点类型筛选
+function selectKindFilter(value: 'all' | 'pt' | 'cd') {
+  kindFilter.value = value
   filterMenu.value = false
 }
 
@@ -317,6 +334,10 @@ async function exportSites() {
       limit_seconds: site.limit_seconds,
       is_active: site.is_active,
       pri: site.pri,
+      kind: site.kind,
+      auth_type: site.auth_type,
+      username: site.username,
+      auth_refresh_interval: site.auth_refresh_interval,
     }))
 
     // 创建Blob对象
@@ -360,6 +381,15 @@ watch(
     }
   },
   { immediate: true },
+)
+
+watch(
+  () => kindFilter.value,
+  value => {
+    if (value !== 'all' && sortMode.value) {
+      sortMode.value = false
+    }
+  },
 )
 
 const shouldShowFloatingActions = computed(() => route.path === '/site' && isRefreshed.value && canManage.value)
@@ -453,7 +483,7 @@ useNativePageHeader({
         >
           <!-- 原生模式只保留可访问的外部锚点；隐藏按钮的 aria-owns 会使 WebKit 连带隐藏菜单。 -->
           <template v-if="!nativeChromeActive" #activator="{ props }">
-            <IconBtn v-bind="props" :variant="filterOption === 'all' ? 'text' : 'tonal'" :color="currentFilter?.color">
+            <IconBtn v-bind="props" :variant="hasActiveFilter ? 'tonal' : 'text'" :color="currentFilter?.color">
               <VIcon :icon="currentFilter?.icon || 'mdi-filter'" />
             </IconBtn>
           </template>
@@ -473,6 +503,22 @@ useNativePageHeader({
                 <VListItemTitle>{{ option.label }}</VListItemTitle>
                 <template #append>
                   <VIcon v-if="filterOption === option.value" icon="mdi-check" color="primary" />
+                </template>
+              </VListItem>
+              <VDivider class="my-1" />
+              <VListSubheader>{{ t('site.fields.kind') }}</VListSubheader>
+              <VListItem
+                v-for="option in kindFilterOptions"
+                :key="`kind-${option.value}`"
+                :active="kindFilter === option.value"
+                @click="selectKindFilter(option.value)"
+              >
+                <template #prepend>
+                  <VIcon :icon="option.icon" />
+                </template>
+                <VListItemTitle>{{ option.label }}</VListItemTitle>
+                <template #append>
+                  <VIcon v-if="kindFilter === option.value" icon="mdi-check" color="primary" />
                 </template>
               </VListItem>
             </VList>
@@ -552,8 +598,8 @@ useNativePageHeader({
   <NoDataFound
     v-if="draggableSiteList.length === 0 && isRefreshed"
     error-code="404"
-    :error-title="filterOption === 'all' ? t('site.noSites') : t('common.noMatchingData')"
-    :error-description="filterOption === 'all' ? t('site.sitesWillBeShownHere') : t('common.tryChangingFilters')"
+    :error-title="hasActiveFilter ? t('common.noMatchingData') : t('site.noSites')"
+    :error-description="hasActiveFilter ? t('common.tryChangingFilters') : t('site.sitesWillBeShownHere')"
   />
   <!-- 新增站点按钮 -->
   <Teleport to="body" v-if="route.path === '/site'">

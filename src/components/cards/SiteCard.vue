@@ -57,6 +57,15 @@ const testButtonText = ref(t('site.testConnectivity'))
 // 测试按钮可用性
 const testButtonDisable = ref(false)
 
+// TG 频道只展示名称、频道标识、启停状态与操作菜单。
+const isTgChannel = computed(() => cardProps.site?.kind === 'tg')
+
+// CD 站点与 PT 站点的展示与操作不同。
+const isCdSite = computed(() => cardProps.site?.kind === 'cd')
+
+// 站点类型徽标文案。
+const kindLabel = computed(() => (isCdSite.value ? t('site.kindOptions.cd') : t('site.kindOptions.pt')))
+
 // 查询站点图标
 async function getSiteIcon() {
   const siteId = cardProps.site?.id
@@ -312,6 +321,16 @@ onMounted(() => {
             <!-- 站点名称和特性图标 -->
             <div class="flex min-w-0 flex-1 items-center gap-2">
               <h3 class="min-w-0 flex-1 truncate text-lg font-semibold leading-tight">{{ cardProps.site?.name }}</h3>
+              <VChip v-if="isTgChannel" size="x-small" color="info" variant="tonal" class="shrink-0">TG</VChip>
+              <VChip
+                v-else
+                size="x-small"
+                :color="isCdSite ? 'warning' : 'primary'"
+                variant="tonal"
+                class="shrink-0"
+              >
+                {{ kindLabel }}
+              </VChip>
 
               <!-- 站点特性图标 -->
               <div class="ml-auto flex shrink-0 items-center gap-2">
