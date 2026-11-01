@@ -265,6 +265,12 @@ export function getSettingTabs(t: Composer['t']): NavMenuTabItem[] {
       tab: 'notification',
       description: t('settingTabs.notification.description'),
     },
+    {
+      title: t('settingTabs.netdisk.title'),
+      icon: 'mdi-cloud-outline',
+      tab: 'netdisk',
+      description: t('settingTabs.netdisk.description'),
+    },
   ]
 }
 

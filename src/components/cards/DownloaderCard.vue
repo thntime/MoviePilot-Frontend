@@ -102,6 +102,8 @@ const getIcon = computed(() => {
       return getLogoUrl('rtorrent')
     case 'quark':
       return getLogoUrl('quark')
+    case 'netdisk':
+      return getLogoUrl('netdisk')
     default:
       return getLogoUrl('downloader')
   }

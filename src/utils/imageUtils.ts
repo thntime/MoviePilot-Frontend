@@ -72,6 +72,7 @@ const logoMap: Record<string, string> = {
   synologychat: synologychatLogo,
   vocechat: vocechatLogo,
   downloader: downloaderLogo,
+  netdisk: downloaderLogo,
   mediaserver: mediaserverLogo,
   notification: notificationLogo,
   chrome: chromeLogo,

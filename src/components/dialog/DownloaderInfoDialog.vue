@@ -144,7 +144,7 @@ function generateId() {
 
 /** 初始化下载器新增配置项的兼容默认值。 */
 function initializeDownloaderConfigDefaults() {
-  if (!['qbittorrent', 'transmission', 'quark'].includes(downloaderInfo.value.type)) return
+  if (!['qbittorrent', 'transmission', 'quark', 'netdisk'].includes(downloaderInfo.value.type)) return
   if (!downloaderInfo.value.config) downloaderInfo.value.config = {}
   if (downloaderInfo.value.type === 'qbittorrent' && downloaderInfo.value.config.incomplete_files_ext === undefined)
     downloaderInfo.value.config.incomplete_files_ext = true
@@ -155,6 +155,12 @@ function initializeDownloaderConfigDefaults() {
     if (downloaderInfo.value.config.threads === undefined) downloaderInfo.value.config.threads = 32
     if (downloaderInfo.value.config.rate_limit === undefined) downloaderInfo.value.config.rate_limit = 0
     if (downloaderInfo.value.config.preempt === undefined) downloaderInfo.value.config.preempt = true
+  }
+  if (downloaderInfo.value.type === 'netdisk') {
+    if (downloaderInfo.value.config.threads === undefined) downloaderInfo.value.config.threads = 8
+    if (downloaderInfo.value.config.rate_limit === undefined) downloaderInfo.value.config.rate_limit = 0
+    if (downloaderInfo.value.config.preempt === undefined) downloaderInfo.value.config.preempt = true
+    if (downloaderInfo.value.config.multi_source === undefined) downloaderInfo.value.config.multi_source = false
   }
 }
 
@@ -507,6 +513,69 @@ onMounted(() => {
                 :hint="t('downloader.quarkPreemptHint')"
                 persistent-hint
                 active
+              />
+            </VCol>
+          </VRow>
+          <VRow v-else-if="downloaderInfo.type == 'netdisk'">
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model="downloaderInfo.name"
+                :label="t('downloader.name')"
+                :placeholder="t('downloader.nameRequired')"
+                :hint="t('downloader.name')"
+                persistent-hint
+                active
+                prepend-inner-icon="mdi-label"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VSelect
+                v-model="downloaderInfo.config.threads"
+                :items="quarkThreadsItems"
+                :label="t('downloader.netdiskThreads')"
+                :hint="t('downloader.netdiskThreadsHint')"
+                persistent-hint
+                active
+                prepend-inner-icon="mdi-lan-connect"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model.number="downloaderInfo.config.rate_limit"
+                type="number"
+                min="0"
+                step="1"
+                :label="t('downloader.netdiskRateLimit')"
+                :hint="t('downloader.netdiskRateLimitHint')"
+                persistent-hint
+                active
+                prepend-inner-icon="mdi-speedometer"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VSwitch
+                v-model="downloaderInfo.config.preempt"
+                :label="t('downloader.netdiskPreempt')"
+                :hint="t('downloader.netdiskPreemptHint')"
+                persistent-hint
+                active
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VSwitch
+                v-model="downloaderInfo.config.multi_source"
+                :label="t('downloader.netdiskMultiSource')"
+                :hint="t('downloader.netdiskMultiSourceHint')"
+                persistent-hint
+                active
+              />
+            </VCol>
+            <VCol cols="12">
+              <VAlert
+                variant="tonal"
+                color="info"
+                density="compact"
+                :text="t('downloader.netdiskPlatformLimitHint')"
               />
             </VCol>
           </VRow>
