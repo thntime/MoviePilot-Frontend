@@ -1722,6 +1722,12 @@ export interface TorrentInfo {
   freedate_diff: string
   // 种子类型
   category: string
+  // 资源类型：torrent 种子资源，netdisk 网盘分享资源
+  download_type?: string
+  // 网盘平台标识
+  netdisk_platform?: string
+  // 网盘分享提取码
+  share_password?: string
 }
 
 // 字幕信息

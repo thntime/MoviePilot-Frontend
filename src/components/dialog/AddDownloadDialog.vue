@@ -128,6 +128,10 @@ const loading = ref(false)
 // 是否显示高级选项
 const showAdvancedOptions = ref(false)
 
+// 网盘分享资源可以指定集数，留空表示下载分享内全部文件。
+const episodeSelection = ref('')
+const isNetdiskTorrent = computed(() => props.torrent?.download_type === 'netdisk')
+
 // 当前数据源：优先使用已随媒体或种子传入的完整身份，可在高级选项手动切换。
 const mediaSource = ref<MediaDataSource>(
   props.musicType && !props.media ? 'musicbrainz' : deriveMediaSource(props.media, props.torrent),
@@ -287,11 +291,18 @@ async function addDownload() {
       music_type?: Exclude<MusicEntityType, 'artist'>
       allow_unrecognized?: boolean
       save_path: string | null
+      episode_selection?: string
       torrent_in: TorrentInfo | undefined
     } = {
       torrent_in: props.torrent,
       downloader: selectedDownloader.value,
       save_path: selectedDirectory.value,
+    }
+
+    // 网盘分享可以只下载指定集数，留空表示整包。
+    const normalizedEpisodes = episodeSelection.value.trim()
+    if (isNetdiskTorrent.value && normalizedEpisodes) {
+      payload.episode_selection = normalizedEpisodes
     }
 
     if (props.media) {
@@ -432,6 +443,18 @@ onMounted(() => {
                 <VListItem v-bind="itemProps" role="option" :title="item.raw.title" />
               </template>
             </VCombobox>
+          </VCol>
+          <VCol v-if="isNetdiskTorrent" cols="12">
+            <VTextField
+              v-model="episodeSelection"
+              :label="t('dialog.addDownload.episodeSelection')"
+              :placeholder="t('dialog.addDownload.episodeSelectionPlaceholder')"
+              :hint="t('dialog.addDownload.episodeSelectionHint')"
+              persistent-hint
+              variant="underlined"
+              density="comfortable"
+              prepend-inner-icon="mdi-numeric"
+            />
           </VCol>
         </VRow>
         <VRow class="px-5 mt-2">

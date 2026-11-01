@@ -23,6 +23,7 @@ import { useModuleCatalog } from '@/composables/useModuleCatalog'
 import { useGithubTokenAuth } from '@/composables/useGithubTokenAuth'
 import GithubTokenAuthDialog from '@/components/github/GithubTokenAuthDialog.vue'
 import GithubTokenSetupCard from '@/components/github/GithubTokenSetupCard.vue'
+import { isPosterProxyEnabled, setPosterProxyEnabled } from '@/utils/imageUtils'
 import CollapsibleSettingCard from '@/components/system/CollapsibleSettingCard.vue'
 import { fetchAgentPetDeclarations, getAgentPetId } from '@/stores/agentPet'
 import type { AgentPetDeclaration } from '@/types/agentHost'
@@ -1506,10 +1507,35 @@ const nativeAddMediaServerMenu = computed<NativeStandaloneMenuBinding>(() => ({
     action('custom', { title: t('setting.system.custom'), invoke: () => addMediaServer('custom') }),
   ],
 }))
+// 海报代理开关保存在浏览器本地：服务端能访问 TMDB，客户端不一定能。
+const posterProxyEnabled = ref(isPosterProxyEnabled())
+
+function onPosterProxyChange(value: unknown) {
+  posterProxyEnabled.value = Boolean(value)
+  setPosterProxyEnabled(posterProxyEnabled.value)
+  $toast.info(t('setting.system.posterProxyReloadHint'))
+}
 </script>
 
 <template>
   <VRow>
+    <VCol cols="12">
+      <VCard>
+        <VCardItem>
+          <VCardTitle>{{ t('setting.system.posterProxy') }}</VCardTitle>
+          <VCardSubtitle>{{ t('setting.system.posterProxyDesc') }}</VCardSubtitle>
+        </VCardItem>
+        <VCardText>
+          <VSwitch
+            :model-value="posterProxyEnabled"
+            :label="t('setting.system.posterProxyEnable')"
+            :hint="t('setting.system.posterProxyHint')"
+            persistent-hint
+            @update:model-value="onPosterProxyChange"
+          />
+        </VCardText>
+      </VCard>
+    </VCol>
     <VCol cols="12">
       <VCard>
         <VCardItem>

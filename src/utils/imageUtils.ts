@@ -9,6 +9,7 @@ import { getActivePinia } from 'pinia'
 import qbittorrentLogo from '@/assets/images/logos/qbittorrent.png'
 import transmissionLogo from '@/assets/images/logos/transmission.png'
 import rtorrentLogo from '@/assets/images/logos/rtorrent.png'
+import quarkLogo from '@/assets/images/logos/quark.svg'
 import embyLogo from '@/assets/images/logos/emby.png'
 import zspaceLogo from '@/assets/images/logos/zspace.webp'
 import jellyfinLogo from '@/assets/images/logos/jellyfin.png'
@@ -53,6 +54,7 @@ const logoMap: Record<string, string> = {
   qbittorrent: qbittorrentLogo,
   transmission: transmissionLogo,
   rtorrent: rtorrentLogo,
+  quark: quarkLogo,
   emby: embyLogo,
   zspace: zspaceLogo,
   jellyfin: jellyfinLogo,
@@ -221,6 +223,30 @@ export function getProxyImageUrl(url: string, options: ImageProxyOptions = {}): 
  * @param useCache 是否使用后端图片缓存
  * @returns 转换后的图片地址
  */
+/** 海报代理开关的本地存储键，按浏览器保存，切换后无需重启服务。 */
+const POSTER_PROXY_STORAGE_KEY = 'MP_POSTER_PROXY'
+/** 允许走服务端代理的海报域名，避免把任意图片都绕到后端。 */
+const POSTER_PROXY_HOSTS = ['image.tmdb.org']
+
+/** 海报是否走服务端代理，默认开启：服务端能访问 TMDB，客户端不一定能。 */
+export function isPosterProxyEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem(POSTER_PROXY_STORAGE_KEY)
+    return raw === null ? true : raw === '1'
+  } catch {
+    return true
+  }
+}
+
+/** 写入海报代理开关。 */
+export function setPosterProxyEnabled(enabled: boolean): void {
+  try {
+    localStorage.setItem(POSTER_PROXY_STORAGE_KEY, enabled ? '1' : '0')
+  } catch {
+    // 隐私模式下写入失败时保持默认行为，不影响页面渲染。
+  }
+}
+
 export function getDisplayImageUrl(url: string, useCache = false): string {
   if (!url || !/^https?:\/\//i.test(url)) return url
   const encodedUrl = encodeURIComponent(url)
@@ -229,7 +255,12 @@ export function getDisplayImageUrl(url: string, useCache = false): string {
     const proxiedUrl = buildBangumiImageProxyUrl(url, bangumiSettings.baseUrl)
     return getProxyImageUrl(proxiedUrl, { proxy: true, useCache })
   }
-  if (useCache) return `${import.meta.env.VITE_API_BASE_URL}system/cache/image?url=${encodedUrl}`
+  const cacheUrl = `${import.meta.env.VITE_API_BASE_URL}system/cache/image?url=${encodedUrl}`
+  // 海报开关对海报域名有最终决定权：关掉时即使全局缓存开启也走直连。
+  if (POSTER_PROXY_HOSTS.some(host => url.includes(host))) {
+    return isPosterProxyEnabled() ? cacheUrl : url
+  }
+  if (useCache) return cacheUrl
   if (url.includes('doubanio.com')) return getProxyImageUrl(url)
   return url
 }

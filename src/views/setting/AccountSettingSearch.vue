@@ -48,6 +48,9 @@ const selectedMediaSource = ref<string[]>([])
 
 // 当前选中的过滤规则组
 const selectedFilterGroup = ref<string[]>([])
+// 网盘短剧判定阈值：平均每集时长上限（秒）与平均每集大小上限（MB）
+const shortDramaMaxDuration = ref<number | null>(null)
+const shortDramaMaxSize = ref<number | null>(null)
 
 // 过滤规则组选择项
 const filterRuleGroupOptions = computed(() => {
@@ -109,6 +112,11 @@ async function loadSearchSetting() {
     selectedMediaSource.value = result1.value?.split(',') ?? []
     const result2 = await api.get<{ value?: string[] }>('system/setting/SearchFilterRuleGroups')
     selectedFilterGroup.value = result2.value ?? []
+    const result3 = await api.get<{ value?: number }>('system/setting/NetdiskShortDramaMaxDuration')
+    // 未保存过时展示后端判定使用的默认值，避免界面空白与后端行为不一致。
+    shortDramaMaxDuration.value = result3.value ?? 300
+    const result4 = await api.get<{ value?: number }>('system/setting/NetdiskShortDramaMaxSize')
+    shortDramaMaxSize.value = result4.value ?? 150
   } catch (error) {
     console.log(error)
   }
@@ -141,6 +149,19 @@ async function saveSearchSetting() {
   } catch (error) {
     console.log(error)
     $toast.error('搜索基础设置保存失败！')
+    return
+  }
+
+  try {
+    if (shortDramaMaxDuration.value !== null && shortDramaMaxDuration.value !== undefined) {
+      await api.post('system/setting/NetdiskShortDramaMaxDuration', shortDramaMaxDuration.value, { feedback: 'silent' })
+    }
+    if (shortDramaMaxSize.value !== null && shortDramaMaxSize.value !== undefined) {
+      await api.post('system/setting/NetdiskShortDramaMaxSize', shortDramaMaxSize.value, { feedback: 'silent' })
+    }
+  } catch (error) {
+    console.log(error)
+    $toast.error('网盘短剧阈值保存失败！')
     return
   }
 
@@ -255,6 +276,28 @@ useSilentSettingRefresh(() => loadPageData(true), {
                 :label="t('setting.search.multipleNameSearch')"
                 :hint="t('setting.search.multipleNameSearchHint')"
                 persistent-hint
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model.number="shortDramaMaxDuration"
+                type="number"
+                min="1"
+                :label="t('setting.search.netdiskShortDramaMaxDuration')"
+                :hint="t('setting.search.netdiskShortDramaMaxDurationHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-timer-outline"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model.number="shortDramaMaxSize"
+                type="number"
+                min="1"
+                :label="t('setting.search.netdiskShortDramaMaxSize')"
+                :hint="t('setting.search.netdiskShortDramaMaxSizeHint')"
+                persistent-hint
+                prepend-inner-icon="mdi-harddisk"
               />
             </VCol>
             <VCol cols="12" md="6">

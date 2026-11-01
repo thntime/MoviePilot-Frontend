@@ -29,6 +29,9 @@ vi.mock('@/composables/useSilentSettingRefresh', () => ({
   useSilentSettingRefresh: mocks.useSilentSettingRefresh,
 }))
 
+/** 短剧阈值接口的返回值，用例可按需覆盖。 */
+const thresholdResponses = { duration: 300 as number | null, size: 150 as number | null }
+
 /** 提供独立的站点、搜索配置与环境设置响应。 */
 function mockLoadedSettings() {
   mocks.apiGet.mockImplementation((endpoint: string) => {
@@ -49,6 +52,12 @@ function mockLoadedSettings() {
     }
     if (endpoint === 'system/setting/SearchFilterRuleGroups') {
       return { success: true, data: { value: ['HDR'] } }
+    }
+    if (endpoint === 'system/setting/NetdiskShortDramaMaxDuration') {
+      return { success: true, data: { value: thresholdResponses.duration } }
+    }
+    if (endpoint === 'system/setting/NetdiskShortDramaMaxSize') {
+      return { success: true, data: { value: thresholdResponses.size } }
     }
     if (endpoint === 'system/env') {
       return {
@@ -85,6 +94,8 @@ describe('AccountSettingSearch', () => {
     mocks.toastError.mockReset()
     mocks.toastSuccess.mockReset()
     mocks.useSilentSettingRefresh.mockReset()
+    thresholdResponses.duration = 300
+    thresholdResponses.size = 150
     mockLoadedSettings()
     mocks.apiPost.mockResolvedValue({ success: true })
   })
@@ -119,12 +130,42 @@ describe('AccountSettingSearch', () => {
     await waitFor(() => {
       expect(mocks.apiPost).toHaveBeenNthCalledWith(1, 'system/setting/SEARCH_SOURCE', 'douban,bangumi')
       expect(mocks.apiPost).toHaveBeenNthCalledWith(2, 'system/setting/SearchFilterRuleGroups', ['HDR'])
-      expect(mocks.apiPost).toHaveBeenNthCalledWith(3, 'system/env', {
+      expect(mocks.apiPost).toHaveBeenNthCalledWith(3, 'system/setting/NetdiskShortDramaMaxDuration', 300)
+      expect(mocks.apiPost).toHaveBeenNthCalledWith(4, 'system/setting/NetdiskShortDramaMaxSize', 150)
+      expect(mocks.apiPost).toHaveBeenNthCalledWith(5, 'system/env', {
         SEARCH_MULTIPLE_NAME: false,
         DOWNLOAD_SUBTITLE: false,
         AUTO_DOWNLOAD_USER: '84',
         TORRENT_TAG: 'UPDATED',
       })
+    })
+    await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledWith('搜索基础设置保存成功'))
+  })
+
+  it('shows the backend default thresholds when they were never saved', async () => {
+    thresholdResponses.duration = null
+    thresholdResponses.size = null
+    await renderSettings()
+
+    const durationInput = screen.getByLabelText('网盘短剧时长阈值（秒）') as HTMLInputElement
+    const sizeInput = screen.getByLabelText('网盘短剧大小阈值（MB）') as HTMLInputElement
+    await waitFor(() => expect(durationInput.value).toBe('300'))
+    await waitFor(() => expect(sizeInput.value).toBe('150'))
+  })
+
+  it('saves the netdisk short drama thresholds edited on the page', async () => {
+    await renderSettings()
+    await screen.findByDisplayValue('MOVIEPILOT')
+    const durationInput = screen.getByLabelText('网盘短剧时长阈值（秒）') as HTMLInputElement
+    await waitFor(() => expect(durationInput.value).toBe('300'))
+
+    await fireEvent.update(durationInput, '240')
+    await fireEvent.update(screen.getByLabelText('网盘短剧大小阈值（MB）'), '120')
+    await fireEvent.click(getCard('基础设置').getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(mocks.apiPost).toHaveBeenCalledWith('system/setting/NetdiskShortDramaMaxDuration', 240)
+      expect(mocks.apiPost).toHaveBeenCalledWith('system/setting/NetdiskShortDramaMaxSize', 120)
     })
     await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledWith('搜索基础设置保存成功'))
   })
@@ -142,6 +183,8 @@ describe('AccountSettingSearch', () => {
 
   it('reports an environment business failure and an HTTP failure without reporting success', async () => {
     mocks.apiPost
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ success: true })
       .mockResolvedValueOnce({ success: true })
       .mockResolvedValueOnce({ success: true })
       .mockResolvedValueOnce({ success: false })

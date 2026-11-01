@@ -68,12 +68,35 @@ interface PathMappingRow {
 // 路径映射行数据
 const pathMappingRows = ref<PathMappingRow[]>([])
 
+// 是否明文显示夸克 Cookie
+const showQuarkCookie = ref(false)
+
+/** 夸克下载器必须配置账号 Cookie，否则取链与下载都无法进行。 */
+const quarkCookieRule = (value: unknown) => {
+  const text = String(value ?? '').trim()
+  return text.length > 0 || t('downloader.quarkCookieRequired')
+}
+
 // 路径前缀选项
 const prefixOptions = computed(() => {
   return storageCatalog.value.map(item => ({
     title: item.name_i18n || item.name,
     value: item.type,
   }))
+})
+
+// 夸克并发连接数候选值（与 YunX 保持一致）
+const quarkThreadsOptions = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+
+/** 夸克并发连接数选项，兼容用户已保存的非标准值。 */
+const quarkThreadsItems = computed(() => {
+  const current = Number(downloaderInfo.value.config?.threads)
+  const values = [...quarkThreadsOptions]
+  if (Number.isFinite(current) && current > 0 && !values.includes(current)) {
+    values.push(current)
+    values.sort((a, b) => a - b)
+  }
+  return values.map(value => ({ title: String(value), value }))
 })
 
 /** 获取路径所属的存储类型。 */
@@ -121,12 +144,18 @@ function generateId() {
 
 /** 初始化下载器新增配置项的兼容默认值。 */
 function initializeDownloaderConfigDefaults() {
-  if (!['qbittorrent', 'transmission'].includes(downloaderInfo.value.type)) return
+  if (!['qbittorrent', 'transmission', 'quark'].includes(downloaderInfo.value.type)) return
   if (!downloaderInfo.value.config) downloaderInfo.value.config = {}
   if (downloaderInfo.value.type === 'qbittorrent' && downloaderInfo.value.config.incomplete_files_ext === undefined)
     downloaderInfo.value.config.incomplete_files_ext = true
   if (downloaderInfo.value.type === 'transmission' && downloaderInfo.value.config.rename_partial_files === undefined)
     downloaderInfo.value.config.rename_partial_files = true
+  if (downloaderInfo.value.type === 'quark') {
+    if (downloaderInfo.value.config.cookie === undefined) downloaderInfo.value.config.cookie = ''
+    if (downloaderInfo.value.config.threads === undefined) downloaderInfo.value.config.threads = 32
+    if (downloaderInfo.value.config.rate_limit === undefined) downloaderInfo.value.config.rate_limit = 0
+    if (downloaderInfo.value.config.preempt === undefined) downloaderInfo.value.config.preempt = true
+  }
 }
 
 /** 初始化下载器编辑表单数据。 */
@@ -418,6 +447,66 @@ onMounted(() => {
                 persistent-hint
                 active
                 prepend-inner-icon="mdi-lock"
+              />
+            </VCol>
+          </VRow>
+          <VRow v-else-if="downloaderInfo.type == 'quark'">
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model="downloaderInfo.name"
+                :label="t('downloader.name')"
+                :placeholder="t('downloader.nameRequired')"
+                :hint="t('downloader.name')"
+                persistent-hint
+                active
+                prepend-inner-icon="mdi-label"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model="downloaderInfo.config.cookie"
+                :type="showQuarkCookie ? 'text' : 'password'"
+                :label="t('downloader.quarkCookie')"
+                :hint="t('downloader.quarkCookieHint')"
+                :rules="[quarkCookieRule]"
+                persistent-hint
+                active
+                prepend-inner-icon="mdi-cookie"
+                :append-inner-icon="showQuarkCookie ? 'mdi-eye-off' : 'mdi-eye'"
+                @click:append-inner="showQuarkCookie = !showQuarkCookie"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VSelect
+                v-model="downloaderInfo.config.threads"
+                :items="quarkThreadsItems"
+                :label="t('downloader.quarkThreads')"
+                :hint="t('downloader.quarkThreadsHint')"
+                persistent-hint
+                active
+                prepend-inner-icon="mdi-lan-connect"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
+                v-model.number="downloaderInfo.config.rate_limit"
+                type="number"
+                min="0"
+                step="1"
+                :label="t('downloader.quarkRateLimit')"
+                :hint="t('downloader.quarkRateLimitHint')"
+                persistent-hint
+                active
+                prepend-inner-icon="mdi-speedometer"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VSwitch
+                v-model="downloaderInfo.config.preempt"
+                :label="t('downloader.quarkPreempt')"
+                :hint="t('downloader.quarkPreemptHint')"
+                persistent-hint
+                active
               />
             </VCol>
           </VRow>

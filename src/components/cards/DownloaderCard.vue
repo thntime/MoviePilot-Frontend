@@ -100,6 +100,8 @@ const getIcon = computed(() => {
       return getLogoUrl('transmission')
     case 'rtorrent':
       return getLogoUrl('rtorrent')
+    case 'quark':
+      return getLogoUrl('quark')
     default:
       return getLogoUrl('downloader')
   }
