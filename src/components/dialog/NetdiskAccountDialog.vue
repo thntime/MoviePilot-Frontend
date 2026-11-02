@@ -495,7 +495,7 @@ onBeforeUnmount(() => {
               <VWindowItem value="qr">
                 <div class="d-flex flex-column align-center gap-3 py-2">
                   <template v-if="qrSession">
-                    <VImg :src="qrImageSrc" width="220" height="220" class="rounded-lg border" />
+                    <VImg :src="qrImageSrc" width="260" height="260" contain class="rounded-lg border" />
                     <div class="d-flex align-center gap-2">
                       <VChip
                         size="small"
