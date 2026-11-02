@@ -5835,6 +5835,16 @@ export default {
   netdisk: {
     title: '網盤帳號',
     description: '管理各網盤平台的登入帳號，憑證儲存後不再回顯',
+    sms: {
+      modePassword: '密碼登入',
+      modeSms: '驗證碼登入',
+      phone: '手機號',
+      code: '簡訊驗證碼',
+      sendCode: '發送驗證碼',
+      codeSent: '驗證碼已發送',
+      phoneRequired: '請填寫手機號',
+      verificationRequired: '請填寫手機號、驗證碼並先取得驗證碼',
+    },
     noAccounts: '暫無網盤帳號',
     noAccountsHint: '點擊右上角「新增帳號」，透過 Cookie、CookieCloud、帳號密碼或掃碼登入新增',
     primary: '主帳號',
@@ -5906,6 +5916,8 @@ export default {
       hint: '產生二維碼後，使用網盤官方 App 掃碼完成登入',
       hintWithUrl: '產生二維碼後，使用網盤官方 App 掃碼完成登入；也可在 {url} 登入後再掃碼確認',
       countdown: '{seconds} 秒後過期',
+      showQr: '只看二維碼',
+      showPage: '查看完整頁面',
       loginSuccess: '掃碼登入成功',
       status: {
         pending: '等待掃碼',

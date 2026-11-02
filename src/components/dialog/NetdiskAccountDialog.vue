@@ -7,8 +7,10 @@ import {
   cancelNetdiskQrLogin,
   createNetdiskCookieAccount,
   createNetdiskPasswordAccount,
+  createNetdiskSmsAccount,
   importNetdiskCookieCloudAccount,
   pollNetdiskQrLogin,
+  sendNetdiskSmsCode,
   startNetdiskQrLogin,
   updateNetdiskAccount,
   type NetdiskAccount,
@@ -61,6 +63,13 @@ const username = ref('')
 const password = ref('')
 const showCookie = ref(false)
 const showPassword = ref(false)
+const smsMode = ref(false)
+const smsPhone = ref('')
+const smsCode = ref('')
+const smsVerificationId = ref('')
+const smsSending = ref(false)
+const smsCountdown = ref(0)
+let smsTimer: ReturnType<typeof setInterval> | undefined
 
 // 提交状态
 const submitting = ref(false)
@@ -81,6 +90,11 @@ let qrPollTimer: ReturnType<typeof setInterval> | undefined
 let qrCountdownTimer: ReturnType<typeof setInterval> | undefined
 
 const qrImageSrc = computed(() => (qrSession.value?.image ? `data:image/png;base64,${qrSession.value.image}` : ''))
+const qrPageImageSrc = computed(() =>
+  qrSession.value?.page_image ? `data:image/png;base64,${qrSession.value.page_image}` : ''
+)
+const showFullPage = ref(true)
+const qrDisplaySrc = computed(() => (showFullPage.value && qrPageImageSrc.value ? qrPageImageSrc.value : qrImageSrc.value))
 
 // 可用登录方式；账号密码仅在平台声明支持时展示
 const loginMethods = computed<{ value: LoginMethod; title: string; icon: string }[]>(() => {
@@ -118,6 +132,7 @@ watch(loginMethod, value => {
 async function teardownQrSession() {
   if (qrPollTimer) clearInterval(qrPollTimer)
   if (qrCountdownTimer) clearInterval(qrCountdownTimer)
+  if (smsTimer) clearInterval(smsTimer)
   qrPollTimer = undefined
   qrCountdownTimer = undefined
   const sessionId = qrSession.value?.session_id
@@ -144,6 +159,7 @@ async function startQrLogin() {
       is_primary: isPrimary.value || undefined,
     })
     qrSession.value = session
+    showFullPage.value = Boolean(session.page_image)
     qrStatus.value = 'pending'
     qrErrorMessage.value = ''
     startQrCountdown(session.expires_at)
@@ -268,6 +284,60 @@ async function submitPassword() {
   }
 }
 
+/** 发送光鸭短信验证码。 */
+async function sendSmsCode() {
+  if (!smsPhone.value.trim()) {
+    $toast.warning(t('netdisk.sms.phoneRequired'))
+    return
+  }
+  smsSending.value = true
+  try {
+    const result = await sendNetdiskSmsCode({
+      platform: selectedPlatform.value,
+      phone: smsPhone.value.trim(),
+    })
+    smsVerificationId.value = result.sms_verification_id
+    $toast.success(t('netdisk.sms.codeSent'))
+    smsCountdown.value = 60
+    if (smsTimer) clearInterval(smsTimer)
+    smsTimer = setInterval(() => {
+      smsCountdown.value -= 1
+      if (smsCountdown.value <= 0 && smsTimer) clearInterval(smsTimer)
+    }, 1000)
+  } catch (error) {
+    $toast.error(getApiBusinessErrorMessage(error) ?? t('netdisk.addFailed'))
+  } finally {
+    smsSending.value = false
+  }
+}
+
+/** 短信验证码登录并保存账号。 */
+async function submitSms() {
+  if (!smsPhone.value.trim() || !smsCode.value.trim() || !smsVerificationId.value) {
+    $toast.warning(t('netdisk.sms.verificationRequired'))
+    return
+  }
+  submitting.value = true
+  startNProgress()
+  try {
+    await createNetdiskSmsAccount({
+      platform: selectedPlatform.value,
+      phone: smsPhone.value.trim(),
+      code: smsCode.value.trim(),
+      verification_id: smsVerificationId.value,
+      name: accountName.value.trim() || undefined,
+      is_primary: isPrimary.value || undefined,
+    })
+    $toast.success(t('netdisk.addSuccess'))
+    emit('save')
+  } catch (error) {
+    $toast.error(getApiBusinessErrorMessage(error) ?? t('netdisk.addFailed'))
+  } finally {
+    submitting.value = false
+    doneNProgress()
+  }
+}
+
 /** 保存编辑结果；凭据留空表示不修改。 */
 async function submitEdit() {
   if (!props.account || !accountName.value.trim()) {
@@ -301,6 +371,7 @@ async function handleClose() {
 onBeforeUnmount(() => {
   if (qrPollTimer) clearInterval(qrPollTimer)
   if (qrCountdownTimer) clearInterval(qrCountdownTimer)
+  if (smsTimer) clearInterval(smsTimer)
   // 组件卸载时尽力取消会话；失败不影响关闭流程。
   if (qrSession.value?.session_id) {
     cancelNetdiskQrLogin(qrSession.value.session_id).catch(error => console.error(error))
@@ -309,7 +380,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <VDialog scrollable :close-on-back="false" eager max-width="40rem" :fullscreen="!display.mdAndUp.value">
+  <VDialog scrollable :close-on-back="false" eager max-width="56rem" :fullscreen="!display.mdAndUp.value">
     <VCard>
       <VCardItem class="py-2">
         <template #prepend>
@@ -452,50 +523,122 @@ onBeforeUnmount(() => {
 
               <!-- 账号密码 -->
               <VWindowItem value="password">
-                <VRow>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="username"
-                      :label="t('netdisk.fields.username')"
-                      :rules="[requiredValidator]"
-                      :hint="t('netdisk.hints.username')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-account"
-                    />
-                  </VCol>
-                  <VCol cols="12" md="6">
-                    <VTextField
-                      v-model="password"
-                      :type="showPassword ? 'text' : 'password'"
-                      autocomplete="new-password"
-                      :label="t('netdisk.fields.password')"
-                      :rules="[requiredValidator]"
-                      :hint="t('netdisk.hints.password')"
-                      persistent-hint
-                      prepend-inner-icon="mdi-lock"
-                      :append-inner-icon="showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
-                      @click:append-inner="showPassword = !showPassword"
-                    />
-                  </VCol>
-                </VRow>
-                <div class="d-flex justify-end mt-2">
-                  <VBtn
-                    color="primary"
-                    prepend-icon="mdi-login"
-                    :loading="submitting"
-                    :disabled="!selectedPlatform"
-                    @click="submitPassword"
-                  >
-                    {{ t('netdisk.actions.login') }}
-                  </VBtn>
-                </div>
+                <VBtnToggle
+                  v-if="selectedPlatform === 'guangya'"
+                  v-model="smsMode"
+                  mandatory
+                  density="comfortable"
+                  class="mb-4"
+                >
+                  <VBtn :value="false" prepend-icon="mdi-lock">{{ t('netdisk.sms.modePassword') }}</VBtn>
+                  <VBtn :value="true" prepend-icon="mdi-message-text">{{ t('netdisk.sms.modeSms') }}</VBtn>
+                </VBtnToggle>
+                <template v-if="!smsMode">
+                  <VRow>
+                    <VCol cols="12" md="6">
+                      <VTextField
+                        v-model="username"
+                        :label="t('netdisk.fields.username')"
+                        :rules="[requiredValidator]"
+                        :hint="t('netdisk.hints.username')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-account"
+                      />
+                    </VCol>
+                    <VCol cols="12" md="6">
+                      <VTextField
+                        v-model="password"
+                        :type="showPassword ? 'text' : 'password'"
+                        autocomplete="new-password"
+                        :label="t('netdisk.fields.password')"
+                        :rules="[requiredValidator]"
+                        :hint="t('netdisk.hints.password')"
+                        persistent-hint
+                        prepend-inner-icon="mdi-lock"
+                        :append-inner-icon="showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                        @click:append-inner="showPassword = !showPassword"
+                      />
+                    </VCol>
+                  </VRow>
+                  <div class="d-flex justify-end mt-2">
+                    <VBtn
+                      color="primary"
+                      prepend-icon="mdi-login"
+                      :loading="submitting"
+                      :disabled="!selectedPlatform"
+                      @click="submitPassword"
+                    >
+                      {{ t('netdisk.actions.login') }}
+                    </VBtn>
+                  </div>
+                </template>
+                <template v-else>
+                  <VRow>
+                    <VCol cols="12" md="6">
+                      <VTextField
+                        v-model="smsPhone"
+                        :label="t('netdisk.sms.phone')"
+                        :rules="[requiredValidator]"
+                        persistent-hint
+                        prepend-inner-icon="mdi-cellphone"
+                      />
+                    </VCol>
+                    <VCol cols="12" md="6">
+                      <VTextField
+                        v-model="smsCode"
+                        :label="t('netdisk.sms.code')"
+                        :rules="[requiredValidator]"
+                        persistent-hint
+                        prepend-inner-icon="mdi-message-text"
+                      >
+                        <template #append-inner>
+                          <VBtn
+                            size="small"
+                            variant="text"
+                            :loading="smsSending"
+                            :disabled="smsCountdown > 0"
+                            @click="sendSmsCode"
+                          >
+                            {{ smsCountdown > 0 ? `${smsCountdown}s` : t('netdisk.sms.sendCode') }}
+                          </VBtn>
+                        </template>
+                      </VTextField>
+                    </VCol>
+                  </VRow>
+                  <div class="d-flex justify-end mt-2">
+                    <VBtn
+                      color="primary"
+                      prepend-icon="mdi-login"
+                      :loading="submitting"
+                      :disabled="!selectedPlatform"
+                      @click="submitSms"
+                    >
+                      {{ t('netdisk.actions.login') }}
+                    </VBtn>
+                  </div>
+                </template>
               </VWindowItem>
 
               <!-- 扫码登录 -->
               <VWindowItem value="qr">
                 <div class="d-flex flex-column align-center gap-3 py-2">
                   <template v-if="qrSession">
-                    <VImg :src="qrImageSrc" width="260" height="260" contain class="rounded-lg border" />
+                    <VImg
+                      :src="qrDisplaySrc"
+                      max-width="100%"
+                      max-height="60vh"
+                      contain
+                      class="rounded-lg border"
+                    />
+                    <VBtn
+                      v-if="qrPageImageSrc"
+                      size="small"
+                      variant="text"
+                      :prepend-icon="showFullPage ? 'mdi-qrcode' : 'mdi-monitor'"
+                      @click="showFullPage = !showFullPage"
+                    >
+                      {{ showFullPage ? t('netdisk.qr.showQr') : t('netdisk.qr.showPage') }}
+                    </VBtn>
                     <div class="d-flex align-center gap-2">
                       <VChip
                         size="small"

@@ -5997,6 +5997,16 @@ export default {
   netdisk: {
     title: 'Netdisk Accounts',
     description: 'Manage sign-in accounts for each cloud drive platform. Credentials are never shown after saving.',
+    sms: {
+      modePassword: 'Password',
+      modeSms: 'SMS code',
+      phone: 'Phone number',
+      code: 'SMS code',
+      sendCode: 'Send code',
+      codeSent: 'Code sent',
+      phoneRequired: 'Enter a phone number',
+      verificationRequired: 'Enter phone and code, and request a code first',
+    },
     noAccounts: 'No netdisk accounts yet',
     noAccountsHint: 'Click "Add Account" in the top right to sign in via cookie, CookieCloud, password, or QR code',
     primary: 'Primary',
@@ -6072,6 +6082,8 @@ export default {
       hintWithUrl:
         'After the QR code appears, scan it with the official app of the drive; you can also sign in at {url} and confirm by scanning',
       countdown: 'Expires in {seconds}s',
+      showQr: 'Show QR only',
+      showPage: 'Show full page',
       loginSuccess: 'Signed in via QR code',
       status: {
         pending: 'Waiting for scan',

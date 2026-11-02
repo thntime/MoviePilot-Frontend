@@ -30,6 +30,7 @@ export interface NetdiskQrSession {
   platform: string
   status: string
   image: string
+  page_image?: string
   expires_at: string | null
 }
 
@@ -63,6 +64,24 @@ export interface NetdiskPasswordAccountRequest extends NetdiskAccountBaseRequest
   platform: string
   username: string
   password: string
+}
+
+export interface NetdiskSmsSendRequest {
+  platform: string
+  phone: string
+}
+
+export interface NetdiskSmsLoginRequest extends NetdiskAccountBaseRequest {
+  platform: string
+  phone: string
+  code: string
+  verification_id: string
+}
+
+export interface NetdiskSmsSendResult {
+  sms_verification_id: string
+  sms_is_user: boolean
+  sms_expires_in: number
 }
 
 export interface NetdiskQrStartRequest extends NetdiskAccountBaseRequest {
@@ -116,6 +135,21 @@ export async function importNetdiskCookieCloudAccount(
 /** 账号密码登录并保存账号。 */
 export async function createNetdiskPasswordAccount(payload: NetdiskPasswordAccountRequest): Promise<NetdiskAccount> {
   const result = await api.post<NetdiskAccountPayload, NetdiskAccountPayload>('netdisk/accounts/password', payload, {
+    feedback: 'silent',
+  })
+  return result.account
+}
+
+/** 发送短信验证码。 */
+export function sendNetdiskSmsCode(payload: NetdiskSmsSendRequest): Promise<NetdiskSmsSendResult> {
+  return api.post<NetdiskSmsSendResult, NetdiskSmsSendResult>('netdisk/accounts/sms/send', payload, {
+    feedback: 'silent',
+  })
+}
+
+/** 短信验证码登录并保存账号。 */
+export async function createNetdiskSmsAccount(payload: NetdiskSmsLoginRequest): Promise<NetdiskAccount> {
+  const result = await api.post<NetdiskAccountPayload, NetdiskAccountPayload>('netdisk/accounts/sms/login', payload, {
     feedback: 'silent',
   })
   return result.account

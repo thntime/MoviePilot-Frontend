@@ -5833,6 +5833,16 @@ export default {
   netdisk: {
     title: '网盘账号',
     description: '管理各网盘平台的登录账号，凭据保存后不再回显',
+    sms: {
+      modePassword: '密码登录',
+      modeSms: '验证码登录',
+      phone: '手机号',
+      code: '短信验证码',
+      sendCode: '发送验证码',
+      codeSent: '验证码已发送',
+      phoneRequired: '请填写手机号',
+      verificationRequired: '请填写手机号、验证码并先获取验证码',
+    },
     noAccounts: '暂无网盘账号',
     noAccountsHint: '点击右上角「新增账号」，通过 Cookie、CookieCloud、账号密码或扫码登录添加',
     primary: '主账号',
@@ -5904,6 +5914,8 @@ export default {
       hint: '生成二维码后，使用网盘官方 App 扫码完成登录',
       hintWithUrl: '生成二维码后，使用网盘官方 App 扫码完成登录；也可在 {url} 登录后再扫码确认',
       countdown: '{seconds} 秒后过期',
+      showQr: '只看二维码',
+      showPage: '查看完整页面',
       loginSuccess: '扫码登录成功',
       status: {
         pending: '等待扫码',
