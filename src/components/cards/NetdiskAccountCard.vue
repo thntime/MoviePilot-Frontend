@@ -122,7 +122,7 @@ async function deleteAccount() {
 </script>
 
 <template>
-  <VCard variant="tonal" class="app-card-shell app-card-colorful">
+  <VCard variant="tonal" class="app-card-shell app-card-colorful netdisk-account-card">
     <VCardText class="app-card-summary">
       <div class="app-card-summary__content">
         <div class="app-card-summary__title-row">
@@ -144,7 +144,7 @@ async function deleteAccount() {
           </span>
         </div>
       </div>
-      <div class="app-card-summary__media" aria-hidden="true">
+      <div class="app-card-summary__media">
         <VMenu location="bottom end">
           <template #activator="{ props: menuProps }">
             <IconBtn v-bind="menuProps" variant="text" @click.stop>

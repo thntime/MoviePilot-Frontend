@@ -6033,7 +6033,7 @@ export default {
       cookie: 'Paste Cookie',
       cookiecloud: 'CookieCloud',
       password: 'Password',
-      qr: 'QR Code',
+      qr: 'Web login',
     },
     fields: {
       platform: 'Platform',

@@ -449,8 +449,8 @@ onMounted(() => {
             </div>
           </VBtn>
 
-          <!-- 用户数据按钮 -->
-          <VBtn icon variant="text" @click.stop="handleSiteUserData" size="36">
+          <!-- 用户数据按钮：CD 站点没有站点用户数据 -->
+          <VBtn v-if="!isCdSite" icon variant="text" @click.stop="handleSiteUserData" size="36">
             <VIcon icon="mdi-chart-bell-curve" size="20" />
           </VBtn>
 

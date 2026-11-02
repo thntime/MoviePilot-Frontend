@@ -5871,7 +5871,7 @@ export default {
       cookie: '貼上 Cookie',
       cookiecloud: 'CookieCloud 匯入',
       password: '帳號密碼',
-      qr: '掃碼登入',
+      qr: '網頁登入',
     },
     fields: {
       platform: '網盤平台',

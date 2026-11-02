@@ -623,12 +623,11 @@ onBeforeUnmount(() => {
               <VWindowItem value="qr">
                 <div class="d-flex flex-column align-center gap-3 py-2">
                   <template v-if="qrSession">
-                    <VImg
+                    <img
                       :src="qrDisplaySrc"
-                      max-width="100%"
-                      max-height="60vh"
-                      contain
+                      alt=""
                       class="rounded-lg border"
+                      style="max-width: 100%; max-height: 60vh; object-fit: contain"
                     />
                     <VBtn
                       v-if="qrPageImageSrc"

@@ -5869,7 +5869,7 @@ export default {
       cookie: '粘贴 Cookie',
       cookiecloud: 'CookieCloud 导入',
       password: '账号密码',
-      qr: '扫码登录',
+      qr: '网页登录',
     },
     fields: {
       platform: '网盘平台',

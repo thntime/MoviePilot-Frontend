@@ -1076,13 +1076,30 @@ html[data-theme-radius='extra'] {
 
 .app-card-summary__media {
   position: absolute;
-  z-index: 0;
+  z-index: 2;
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
   inset-block-end: 0.75rem;
   inset-inline-end: 1rem;
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.netdisk-account-card .app-card-summary {
+  block-size: auto;
+  min-block-size: 7.5rem;
+}
+
+.netdisk-account-card .app-card-summary__meta {
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+  white-space: normal;
+}
+
+.netdisk-account-card .app-card-summary__meta-item {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .app-card-summary--single-action .app-card-summary__media,
