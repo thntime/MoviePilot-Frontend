@@ -6,6 +6,7 @@ import { formatFileSize } from '@/@core/utils/formatters'
 import { useConfirm } from '@/composables/useConfirm'
 import { useGlobalSettingsStore } from '@/stores'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
+import { getNetdiskPlatformName } from '@/utils/netdisk'
 import { useI18n } from 'vue-i18n'
 
 const DownloadTaskSettingsDialog = defineAsyncComponent(
@@ -48,8 +49,17 @@ const posterUrl = computed(() =>
 const hasPosterImage = computed(() => Boolean(posterUrl.value && !imageLoadError.value))
 
 const mediaTitle = computed(() => media.value.title || props.info?.name || props.info?.title || t('common.unknown'))
-// 未识别任务的主标题会回退到种子名，此时不再重复展示同一行种子名。
-const showTorrentTitle = computed(() => Boolean(props.info?.title) && props.info?.title !== mediaTitle.value)
+// 网盘任务优先展示「平台：分享码」，比分享标题更稳定，也便于用户定位来源。
+const netdiskSourceText = computed(() => {
+  const platform = String(props.info?.netdisk_platform || '').trim()
+  if (!platform) return ''
+  const platformName = getNetdiskPlatformName(t, platform)
+  const shareCode = String(props.info?.share_code || props.info?.name || '').trim()
+  return shareCode ? `${platformName}：${shareCode}` : platformName
+})
+const secondaryTitleText = computed(() => netdiskSourceText.value || String(props.info?.title || '').trim())
+// 未识别任务的主标题会回退到种子名/分享码，此时不再重复展示同一行。
+const showSecondaryTitle = computed(() => Boolean(secondaryTitleText.value) && secondaryTitleText.value !== mediaTitle.value)
 
 const episodeText = computed(() => {
   const recognizedEpisode = [media.value.season, media.value.episode].filter(Boolean).join(' ')
@@ -117,6 +127,21 @@ const hasUploadSpeed = computed(() => Number.parseFloat(props.info?.upspeed || '
 
 // 下载状态跟随轮询数据变化，操作成功时也会立即响应。
 const isDownloading = ref(props.info?.state === 'downloading')
+const taskState = computed(() => String(props.info?.state || '').trim().toLowerCase())
+const isFailed = computed(() => !isDownloading.value && taskState.value === 'error')
+const isCompleted = computed(
+  () => !isDownloading.value && ['completed', 'transferred'].includes(taskState.value),
+)
+const stateColor = computed(() =>
+  isDownloading.value ? 'info' : isFailed.value ? 'error' : isCompleted.value ? 'success' : 'warning',
+)
+const stateIcon = computed(() => {
+  if (isDownloading.value) return 'mdi-download'
+  if (isFailed.value) return 'mdi-alert-circle-outline'
+  if (isCompleted.value) return 'mdi-check-circle-outline'
+  return 'mdi-pause'
+})
+const errorText = computed(() => (isDownloading.value ? '' : String(props.info?.error || '').trim()))
 
 /** 剩余时间只对下载中的任务有意义；下载器未给出时不展示占位符。 */
 const remainingTimeText = computed(() => {
@@ -124,10 +149,17 @@ const remainingTimeText = computed(() => {
   if (!isDownloading.value || !leftTime || leftTime === '--') return ''
   return t('downloading.remainingTime', { time: leftTime })
 })
-const stateText = computed(() =>
-  isDownloading.value ? t('downloading.stateDownloading') : t('downloading.statePaused'),
-)
-const toggleActionText = computed(() => (isDownloading.value ? t('common.pause') : t('downloading.resume')))
+const stateText = computed(() => {
+  if (isDownloading.value) return t('downloading.stateDownloading')
+  if (isFailed.value) return t('downloading.stateError')
+  if (isCompleted.value) return t('downloading.stateCompleted')
+  return t('downloading.statePaused')
+})
+const toggleActionText = computed(() => {
+  if (isDownloading.value) return t('common.pause')
+  if (isFailed.value) return t('downloading.retry')
+  return t('downloading.resume')
+})
 
 watch(
   () => props.info?.state,
@@ -257,8 +289,8 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                   <span class="downloading-card__title-text">{{ mediaTitle }}</span>
                   <span v-if="titleMetaText" class="downloading-card__title-meta">{{ titleMetaText }}</span>
                 </div>
-                <div v-if="showTorrentTitle" class="downloading-card__torrent-title" :title="props.info?.title">
-                  {{ props.info?.title }}
+                <div v-if="showSecondaryTitle" class="downloading-card__torrent-title" :title="secondaryTitleText">
+                  {{ secondaryTitleText }}
                 </div>
               </div>
 
@@ -277,10 +309,20 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                 </template>
               </div>
 
+              <div v-if="isFailed && errorText" class="downloading-card__error" :title="errorText">
+                {{ errorText }}
+              </div>
+
               <!-- 速率与百分比同一行；状态与剩余时间纵向排列，右侧保留操作按钮。 -->
               <div
                 class="downloading-card__progress"
-                :class="isDownloading ? 'downloading-card__progress--active' : 'downloading-card__progress--paused'"
+                :class="[
+                  isDownloading ? 'downloading-card__progress--active' : 'downloading-card__progress--paused',
+                  {
+                    'downloading-card__progress--failed': isFailed,
+                    'downloading-card__progress--completed': isCompleted,
+                  },
+                ]"
               >
                 <div class="downloading-card__progress-label">
                   <div class="downloading-card__speeds">
@@ -304,7 +346,7 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                 <VProgressLinear
                   :aria-label="stateText"
                   :model-value="progressValue"
-                  :color="isDownloading ? 'info' : 'warning'"
+                  :color="stateColor"
                   bg-color="surface-variant"
                   height="4"
                   rounded
@@ -313,7 +355,7 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                 <div class="downloading-card__footer">
                   <div class="downloading-card__progress-copy">
                     <span class="downloading-card__progress-state">
-                      <VIcon :icon="isDownloading ? 'mdi-download' : 'mdi-pause'" size="14" />
+                      <VIcon :icon="stateIcon" size="14" />
                       {{ stateText }}
                     </span>
                     <span
@@ -486,6 +528,15 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   white-space: nowrap;
 }
 
+.downloading-card__error {
+  overflow: hidden;
+  color: rgb(var(--v-theme-error));
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .downloading-card__meta {
   display: flex;
   min-inline-size: 0;
@@ -534,6 +585,14 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
 
 .downloading-card__progress--paused {
   --downloading-card-status-color: rgb(var(--v-theme-warning));
+}
+
+.downloading-card__progress--failed {
+  --downloading-card-status-color: rgb(var(--v-theme-error));
+}
+
+.downloading-card__progress--completed {
+  --downloading-card-status-color: rgb(var(--v-theme-success));
 }
 
 .downloading-card__progress-label,

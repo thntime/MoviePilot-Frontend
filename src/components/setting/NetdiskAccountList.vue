@@ -1,0 +1,164 @@
+<script lang="ts" setup>
+import type { PropType } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { NetdiskAccount } from '@/api/netdisk'
+import { getNetdiskPlatformName, getNetdiskQuotaPercent, getNetdiskStatusMeta } from '@/utils/netdisk'
+
+// 国际化
+const { t } = useI18n()
+
+// 输入参数
+const props = defineProps({
+  // 按平台分组后的账号（保持父级排序）
+  groupedAccounts: {
+    type: Array as PropType<Array<[string, NetdiskAccount[]]>>,
+    required: true,
+  },
+  // 当前选中账号 id
+  selectedId: {
+    type: Number as PropType<number | null>,
+    default: null,
+  },
+})
+
+// 定义触发的自定义事件
+const emit = defineEmits(['select'])
+
+// 搜索关键字
+const search = ref('')
+
+// 账号较多或正在搜索时才显示搜索框
+const showSearch = computed(() => {
+  const total = props.groupedAccounts.reduce((sum, [, list]) => sum + list.length, 0)
+  return total >= 8 || search.value.trim() !== ''
+})
+
+// 过滤后的分组；搜索不改变当前选中
+const filteredGroups = computed<Array<[string, NetdiskAccount[]]>>(() => {
+  const keyword = search.value.trim().toLowerCase()
+  if (!keyword) return props.groupedAccounts
+  const result: Array<[string, NetdiskAccount[]]> = []
+  for (const [platform, list] of props.groupedAccounts) {
+    const platformName = getNetdiskPlatformName(t, platform).toLowerCase()
+    const matched = list.filter(account => {
+      return (
+        account.nickname.toLowerCase().includes(keyword) ||
+        account.name.toLowerCase().includes(keyword) ||
+        platformName.includes(keyword)
+      )
+    })
+    if (matched.length > 0) result.push([platform, matched])
+  }
+  return result
+})
+
+function selectAccount(account: NetdiskAccount) {
+  emit('select', account.id)
+}
+</script>
+
+<template>
+  <div class="netdisk-account-list d-flex flex-column">
+    <div v-if="showSearch" class="px-3 pt-3 pb-2 shrink-0">
+      <VTextField
+        v-model="search"
+        :placeholder="t('netdisk.list.search')"
+        prepend-inner-icon="mdi-magnify"
+        density="compact"
+        variant="outlined"
+        hide-details
+        clearable
+        :aria-label="t('netdisk.list.search')"
+      />
+    </div>
+    <div class="netdisk-console__scroll flex-grow-1" role="listbox" :aria-label="t('netdisk.list.label')">
+      <template v-for="[platform, list] in filteredGroups" :key="platform">
+        <div class="netdisk-account-list__group-header">
+          <span class="text-caption font-weight-medium">{{ getNetdiskPlatformName(t, platform) }}</span>
+          <span class="text-caption text-medium-emphasis">{{ t('netdisk.list.count', { count: list.length }) }}</span>
+        </div>
+        <VListItem
+          v-for="account in list"
+          :key="account.id"
+          :active="account.id === selectedId"
+          class="netdisk-account-list__item"
+          role="option"
+          :aria-selected="account.id === selectedId"
+          @click="selectAccount(account)"
+        >
+          <template #prepend>
+            <span
+              class="netdisk-account-list__status-dot"
+              :class="`bg-${getNetdiskStatusMeta(t, account.status).color}`"
+            />
+            <span class="d-sr-only">{{ getNetdiskStatusMeta(t, account.status).text }}</span>
+          </template>
+          <VListItemTitle class="d-flex align-center gap-1">
+            <span class="text-truncate" :title="account.nickname || account.name">
+              {{ account.nickname || account.name }}
+            </span>
+            <VIcon
+              v-if="account.is_primary"
+              icon="mdi-star"
+              color="warning"
+              size="14"
+              class="shrink-0"
+              :aria-label="t('netdisk.primary')"
+            />
+          </VListItemTitle>
+          <VListItemSubtitle v-if="account.quota_total > 0" class="d-flex align-center gap-2 mt-1">
+            <VProgressLinear
+              :model-value="getNetdiskQuotaPercent(account.quota_used, account.quota_total)"
+              height="4"
+              rounded
+              class="flex-grow-1"
+            />
+            <span class="text-caption text-medium-emphasis shrink-0">
+              {{ getNetdiskQuotaPercent(account.quota_used, account.quota_total) }}%
+            </span>
+          </VListItemSubtitle>
+          <VListItemSubtitle v-else class="mt-1">
+            {{ getNetdiskStatusMeta(t, account.status).text }}
+          </VListItemSubtitle>
+        </VListItem>
+      </template>
+      <div v-if="filteredGroups.length === 0" class="pa-4 text-center text-medium-emphasis text-body-2">
+        <div>{{ t('netdisk.list.searchEmpty') }}</div>
+        <VBtn variant="text" size="small" class="mt-1" @click="search = ''">
+          {{ t('netdisk.list.clearSearch') }}
+        </VBtn>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style lang="scss" scoped>
+.netdisk-account-list {
+  min-block-size: 0;
+  block-size: 100%;
+  border-inline-end: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.netdisk-account-list__group-header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 6px;
+  padding-inline: 16px;
+  background: rgb(var(--v-theme-surface));
+}
+
+.netdisk-account-list__item {
+  margin-block: 2px;
+}
+
+.netdisk-account-list__status-dot {
+  display: inline-block;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+}
+</style>

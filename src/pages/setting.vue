@@ -18,6 +18,7 @@ const AccountSettingSearch = defineAsyncComponent(() => import('@/views/setting/
 const AccountSettingSubscribe = defineAsyncComponent(() => import('@/views/setting/AccountSettingSubscribe.vue'))
 const AccountSettingNotification = defineAsyncComponent(() => import('@/views/setting/AccountSettingNotification.vue'))
 const AccountSettingNetdisk = defineAsyncComponent(() => import('@/views/setting/AccountSettingNetdisk.vue'))
+const NetdiskBrowser = defineAsyncComponent(() => import('@/views/netdisk/NetdiskBrowser.vue'))
 
 const visitedTabs = ref(new Set<string>())
 
@@ -30,6 +31,7 @@ const settingTabComponents = [
   { value: 'subscribe', component: AccountSettingSubscribe },
   { value: 'notification', component: AccountSettingNotification },
   { value: 'netdisk', component: AccountSettingNetdisk },
+  { value: 'netdisk-files', component: NetdiskBrowser },
 ]
 const settingTabValues = new Set(settingTabComponents.map(item => item.value))
 

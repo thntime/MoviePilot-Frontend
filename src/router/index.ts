@@ -260,6 +260,15 @@ const router = createRouter({
           },
         },
         {
+          path: '/netdisk',
+          component: () => import('../pages/netdisk.vue'),
+          meta: {
+            keepAlive: true,
+            requiresAuth: true,
+            permission: 'admin',
+          },
+        },
+        {
           path: '/browse/:paths+',
           component: () => import('../pages/discover/browse.vue'),
           props: true,

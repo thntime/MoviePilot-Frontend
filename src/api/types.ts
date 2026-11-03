@@ -1184,6 +1184,12 @@ export interface DownloadingInfo {
   progress?: number
   // 状态
   state?: string
+  // 最近一次失败原因
+  error?: string
+  // 网盘平台标识
+  netdisk_platform?: string
+  // 网盘分享码
+  share_code?: string
   // 下载速度
   dlspeed?: string
   // 上传速度

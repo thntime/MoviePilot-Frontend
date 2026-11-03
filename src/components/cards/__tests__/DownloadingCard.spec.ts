@@ -480,3 +480,23 @@ describe('DownloadingCard deletion', () => {
     expect(container.querySelector('.downloading-card')).toBeInTheDocument()
   })
 })
+
+describe('DownloadingCard netdisk source and failure state', () => {
+  it('shows the netdisk platform with the share code instead of the raw share title', async () => {
+    await renderCard(downloading({ netdisk_platform: 'xunlei', share_code: 'VP5RkWv5', title: 'xunlei:VP5RkWv5' }))
+
+    expect(screen.getByText('迅雷：VP5RkWv5')).toBeInTheDocument()
+    expect(screen.queryByText('xunlei:VP5RkWv5')).not.toBeInTheDocument()
+  })
+
+  it('renders a failed task with its reason instead of pretending it is paused', async () => {
+    const { container } = await renderCard(
+      downloading({ state: 'error', error: '分片 3 重试次数超限：连接超时', netdisk_platform: 'quark', share_code: 'abc123' }),
+    )
+
+    expect(screen.getByText('下载失败')).toBeInTheDocument()
+    expect(screen.getByText('分片 3 重试次数超限：连接超时')).toBeInTheDocument()
+    expect(container.querySelector('.downloading-card__progress')).toHaveClass('downloading-card__progress--failed')
+    expect(actionButtons(container).toggleButton).toHaveAccessibleName('重试')
+  })
+})
