@@ -19,6 +19,7 @@ import type { FileAction, FileSortKey, FileSortOrder } from './types'
 import { vTailEllipsis } from './tailEllipsis'
 import { useKeepAliveRefresh, type KeepAliveRefreshContext } from '@/composables/useKeepAliveRefresh'
 import { openSharedDialog } from '@/composables/useSharedDialog'
+import { useRangeSelection } from '@/composables/useRangeSelection'
 
 // 原生滚动条宽度随系统变化，表头与可滚动列表使用同一内容宽度。
 const tableRef = ref<HTMLElement | null>(null)
@@ -185,6 +186,14 @@ function setItemSelected(item: FileItem, checked: boolean) {
   selected.value = selected.value.filter(selectedItem => getFileItemKey(selectedItem) !== itemKey)
 }
 
+// 选择模式下按住 Shift 连选，范围按筛选和排序后的显示顺序计算
+const rangeSelection = useRangeSelection<FileItem>({
+  items: () => displayItems.value,
+  getKey: getFileItemKey,
+  isSelected,
+  setSelected: (fileItems, checked) => fileItems.forEach(fileItem => setItemSelected(fileItem, checked)),
+})
+
 // 识别结果
 const nameTestResult = ref<Context>()
 
@@ -203,8 +212,19 @@ function closeProgressDialog() {
   progressDialogController = null
 }
 
-// 弹出菜单
-const dropdownItems = ref<{ [key: string]: any }[]>([])
+/** 文件行操作菜单项；value 经 fileMenuAction 映射为实际操作，props 提供图标、颜色与点击处理。 */
+interface FileDropdownItem {
+  title: string
+  value: number
+  show: boolean
+  props: {
+    prependIcon: string
+    color?: string
+    click: (item: FileItem) => unknown
+  }
+}
+
+const dropdownItems = ref<FileDropdownItem[]>([])
 
 // 进度是否激活
 const progressActive = ref(false)
@@ -311,14 +331,15 @@ function revokeCurrentImgLink() {
 
 /** 调整选择模式。 */
 function changeSelectMode() {
-  selectMode.value = !selectMode.value
-  if (!selectMode.value) selected.value = []
+  if (selectMode.value) exitSelectMode()
+  else selectMode.value = true
 }
 
 /** 退出多选模式。 */
 function exitSelectMode() {
   selectMode.value = false
   selected.value = []
+  rangeSelection.reset()
 }
 
 /** 调API加载文件夹内的内容。 */
@@ -476,9 +497,9 @@ function changePath(item: FileItem) {
 }
 
 /** 点击列表项。 */
-function listItemClick(item: FileItem) {
+function listItemClick(item: FileItem, event?: MouseEvent | KeyboardEvent) {
   if (selectMode.value) {
-    setItemSelected(item, !isSelected(item))
+    rangeSelection.select(item, !isSelected(item), !!event?.shiftKey)
     return false
   }
   if (item.type === 'dir') changePath(item)
@@ -1164,9 +1185,8 @@ const nativeSortMenu = computed<NativeStandaloneMenuBinding>(() => ({
               }"
               role="listitem"
               tabindex="0"
-              @click="listItemClick(item)"
-              @keydown.enter.prevent="listItemClick(item)"
-              @keydown.space.prevent="listItemClick(item)"
+              @click="listItemClick(item, $event)"
+              @mousedown.shift.prevent
             >
               <div class="file-row__name">
                 <VCheckbox
@@ -1175,8 +1195,11 @@ const nativeSortMenu = computed<NativeStandaloneMenuBinding>(() => ({
                   :aria-label="item.name"
                   hide-details
                   density="compact"
-                  @update:model-value="setItemSelected(item, !!$event)"
-                  @click.stop
+                  @update:model-value="rangeSelection.selectFromCheckbox(item, !!$event)"
+                  @click.stop="rangeSelection.onCheckboxClick"
+                  @input="rangeSelection.onCheckboxInput(item, $event)"
+                  @keydown.enter.stop
+                  @keydown.space.stop
                 />
                 <VIcon
                   v-else
