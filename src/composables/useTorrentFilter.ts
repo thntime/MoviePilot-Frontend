@@ -1,5 +1,6 @@
 import type { Context } from '@/api/types'
 import { getTorrentTitle, isMusicResource, isUnconfirmedResource } from '@/utils/torrent'
+import { getNetdiskPlatformName } from '@/utils/netdisk'
 import { cloneDeepWith } from 'lodash-es'
 import { useI18n } from 'vue-i18n'
 
@@ -40,6 +41,7 @@ export function useTorrentFilter() {
     resolution: [] as string[],
     webSource: [] as string[],
     subtitle: [] as string[],
+    netdisk: [] as string[],
   })
 
   // 统一存储过滤选项
@@ -53,6 +55,7 @@ export function useTorrentFilter() {
     releaseGroup: [] as string[],
     webSource: [] as string[],
     subtitle: [] as string[],
+    netdisk: [] as string[],
   })
 
   // 排序字段
@@ -71,6 +74,7 @@ export function useTorrentFilter() {
     edition: t('torrent.filterEdition'),
     resolution: t('torrent.filterResolution'),
     releaseGroup: t('torrent.filterReleaseGroup'),
+    netdisk: t('torrent.filterNetdisk'),
   }
 
   // 排序中文名
@@ -99,6 +103,8 @@ export function useTorrentFilter() {
     resolution: data => data.meta_info?.resource_pix,
     webSource: data => data.meta_info?.web_source,
     subtitle: data => data.torrent_info?.labels?.filter(label => subtitleLabels.has(label)),
+    // 网盘平台按国际化展示名参与筛选，未知平台回退原始标识，与卡片徽标口径一致
+    netdisk: data => getNetdiskPlatformName(t, data.torrent_info?.netdisk_platform),
   }
   const filterKeys = Object.keys(filterValueGetters)
 
@@ -308,7 +314,9 @@ export function useTorrentFilter() {
         ? `${meta_info.audio_format}_${meta_info.bit_depth}_${meta_info.sample_rate}_${meta_info.bitrate}`
         : ''
       const pendingKey = isUnconfirmedResource(item) ? index : ''
-      const key = `${pendingKey}_${item.match_status || ''}_${resourceName}_${musicQuality}_${meta_info.resource_pix}_${meta_info.edition}_${meta_info.resource_team}_${meta_info.season_episode}_${torrent_info.size}`
+      // 网盘分享资源每条都是独立渠道，必须各自成卡，不参与任何分组
+      const netdiskKey = torrent_info.download_type === 'netdisk' ? `netdisk_${index}` : ''
+      const key = `${netdiskKey}_${pendingKey}_${item.match_status || ''}_${resourceName}_${musicQuality}_${meta_info.resource_pix}_${meta_info.edition}_${meta_info.resource_team}_${meta_info.season_episode}_${torrent_info.size}`
       const groupedItem = { data: item, originalIndex: index }
       if (groupMap.has(key)) {
         const group = groupMap.get(key)
@@ -464,6 +472,7 @@ export function useTorrentFilter() {
       releaseGroup: 'mdi-account-group-outline',
       webSource: 'mdi-television-play',
       subtitle: 'mdi-subtitles-outline',
+      netdisk: 'mdi-cloud-outline',
     }
     return icons[key] || 'mdi-filter-variant'
   }

@@ -10,6 +10,7 @@ import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useGlobalSettingsStore } from '@/stores'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
 import { buildTorrentDownloadProps, getTorrentTitle } from '@/utils/torrent'
+import { getNetdiskChipClass, getNetdiskPlatformName } from '@/utils/netdisk'
 import MusicMatchBadge from '@/components/misc/MusicMatchBadge.vue'
 
 const AddDownloadDialog = defineAsyncComponent(() => import('../dialog/AddDownloadDialog.vue'))
@@ -38,6 +39,12 @@ const downloadItem = ref(props.torrent)
 const siteIcons = ref<Record<number, string>>({})
 
 const isDownloaded = computed(() => Boolean(torrent.value?.enclosure && downloadedTorrentMap[torrent.value.enclosure]))
+
+// 国际化
+const { t } = useI18n()
+
+// 网盘平台展示名，未知平台回退到原始标识
+const netdiskPlatformName = computed(() => getNetdiskPlatformName(t, torrent.value?.netdisk_platform))
 
 // 添加下载成功
 function addDownloadSuccess(url: string) {
@@ -226,6 +233,17 @@ watch(
 
         <!-- 资源标签区 -->
         <div class="d-flex flex-wrap gap-1 mb-2">
+          <!-- 网盘平台徽标 -->
+          <VChip
+            v-if="netdiskPlatformName"
+            :class="[getNetdiskChipClass(torrent?.netdisk_platform), 'rounded-sm']"
+            size="x-small"
+            variant="elevated"
+          >
+            <VIcon size="x-small" icon="mdi-cloud-outline" class="me-1" />
+            {{ netdiskPlatformName }}
+          </VChip>
+
           <!-- 流媒体平台 -->
           <VChip v-if="meta?.web_source" class="chip-web-source rounded-sm" size="x-small" variant="elevated">
             {{ meta?.web_source }}
@@ -398,6 +416,52 @@ watch(
 
 .chip-bonus {
   background-color: #9c27b0;
+  color: white;
+}
+
+/* 网盘平台徽标配色，每平台一个主色便于一眼区分 */
+.chip-netdisk-quark {
+  background-color: #00a8ff;
+  color: white;
+}
+
+.chip-netdisk-uc {
+  background-color: #ff6d00;
+  color: white;
+}
+
+.chip-netdisk-pan139 {
+  background-color: #1e88e5;
+  color: white;
+}
+
+.chip-netdisk-pan123 {
+  background-color: #43a047;
+  color: white;
+}
+
+.chip-netdisk-pan115 {
+  background-color: #e53935;
+  color: white;
+}
+
+.chip-netdisk-guangya {
+  background-color: #fdd835;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.chip-netdisk-baidu {
+  background-color: #283593;
+  color: white;
+}
+
+.chip-netdisk-xunlei {
+  background-color: #00838f;
+  color: white;
+}
+
+.chip-netdisk-unknown {
+  background-color: #607d8b;
   color: white;
 }
 </style>

@@ -82,6 +82,7 @@ function getFilterIcon(key: string) {
     releaseGroup: 'mdi-account-group-outline',
     webSource: 'mdi-television-play',
     subtitle: 'mdi-subtitles-outline',
+    netdisk: 'mdi-cloud-outline',
   }
   return icons[key] || 'mdi-filter-variant'
 }

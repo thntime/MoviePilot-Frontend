@@ -364,3 +364,56 @@ describe('TorrentCard display and interactions', () => {
     expect(mocks.openSharedDialog).not.toHaveBeenCalled()
   })
 })
+
+describe('TorrentCard netdisk platform badge', () => {
+  beforeEach(() => {
+    Object.keys(downloadedTorrentMap).forEach(url => delete downloadedTorrentMap[url])
+    mocks.getCachedSiteIcon.mockImplementation((site: number) =>
+      Promise.resolve(`https://images.example.com/site-${site}.png`),
+    )
+    mocks.openSharedDialog.mockReturnValue({ close: vi.fn(), id: 1, updateProps: vi.fn() })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  it('renders the localized badge with a platform color when netdisk_platform is set', async () => {
+    const { container } = await renderCard(
+      createContext({ torrent: { download_type: 'netdisk', netdisk_platform: 'quark' } }),
+    )
+
+    const badge = container.querySelector<HTMLElement>('[class*="chip-netdisk"]')
+    expect(badge).not.toBeNull()
+    expect(badge).toHaveClass('chip-netdisk-quark')
+    expect(badge).toHaveTextContent('夸克')
+    // 徽标必须位于标签行最前面
+    const chipRow = badge?.parentElement
+    expect(chipRow?.firstElementChild).toBe(badge)
+  })
+
+  it('falls back to the raw platform id and neutral color for unknown platforms', async () => {
+    const { container } = await renderCard(
+      createContext({ torrent: { download_type: 'netdisk', netdisk_platform: 'mystery' } }),
+    )
+
+    const badge = container.querySelector<HTMLElement>('[class*="chip-netdisk"]')
+    expect(badge).not.toBeNull()
+    expect(badge).toHaveClass('chip-netdisk-unknown')
+    expect(badge).toHaveTextContent('mystery')
+  })
+
+  it('omits the badge when the torrent has no netdisk platform', async () => {
+    const { container } = await renderCard(createContext({ torrent: { netdisk_platform: undefined } }))
+
+    expect(container.querySelector('[class*="chip-netdisk"]')).not.toBeInTheDocument()
+    expect(screen.queryByText('夸克')).not.toBeInTheDocument()
+  })
+
+  it('maps the legacy c139 platform id to the China Mobile badge', async () => {
+    const { container } = await renderCard(
+      createContext({ torrent: { download_type: 'netdisk', netdisk_platform: 'c139' } }),
+    )
+
+    const badge = container.querySelector<HTMLElement>('[class*="chip-netdisk"]')
+    expect(badge).toHaveClass('chip-netdisk-pan139')
+    expect(badge).toHaveTextContent('移动云盘')
+  })
+})

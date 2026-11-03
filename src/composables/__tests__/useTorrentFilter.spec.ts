@@ -8,10 +8,12 @@ vi.mock('vue-i18n', () => ({
 
 /** 资源筛选用例中可独立变化的元数据与站点字段。 */
 interface TorrentOverrides {
+  downloadType?: string
   edition?: string
   freeState?: string
   labels?: string[] | null
   name?: string
+  netdiskPlatform?: string
   pageUrl?: string
   priOrder?: number
   publishTime?: string
@@ -40,7 +42,9 @@ function createTorrent(overrides: TorrentOverrides = {}): Context {
       web_source: overrides.webSource,
     },
     torrent_info: {
+      download_type: overrides.downloadType,
       labels: overrides.labels,
+      netdisk_platform: overrides.netdiskPlatform,
       page_url: overrides.pageUrl ?? `https://example.test/${overrides.title ?? 'torrent'}`,
       pri_order: overrides.priOrder ?? 0,
       pubdate: overrides.publishTime ?? '2025-01-01T00:00:00Z',
@@ -533,5 +537,99 @@ describe('useTorrentFilter', () => {
     expect(filter.sortType.value).toBe('asc')
     snapshot.filterForm.site.push('mutated')
     expect(filter.filterForm.site).toEqual(['Site A', 'Site B'])
+  })
+})
+
+describe('useTorrentFilter netdisk dimension', () => {
+  it('collects netdisk platform options and filters cards by platform', () => {
+    const filter = useTorrentFilter()
+    const torrents = [
+      createTorrent({ downloadType: 'netdisk', netdiskPlatform: 'quark', title: '夸克资源' }),
+      createTorrent({ downloadType: 'netdisk', netdiskPlatform: 'baidu', title: '百度资源' }),
+      createTorrent({ title: 'PT 资源' }),
+    ]
+
+    filter.filterCardData(torrents)
+
+    expect(filter.filterTitles.netdisk).toBe('torrent.filterNetdisk')
+    // 本文件 i18n mock 直接返回 key，选项值即为平台 key
+    expect(filter.filterOptions.netdisk).toEqual(['torrent.netdiskPlatform.quark', 'torrent.netdiskPlatform.baidu'])
+    expect(filter.filterCardData(torrents)).toHaveLength(3)
+
+    filter.filterForm.netdisk = ['torrent.netdiskPlatform.quark']
+    const filtered = filter.filterCardData(torrents)
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0].torrent_info.title).toBe('夸克资源')
+    expect(filter.getFilteredIndices()).toEqual([0])
+
+    filter.filterForm.netdisk = ['torrent.netdiskPlatform.quark', 'torrent.netdiskPlatform.baidu']
+    expect(filter.filterCardData(torrents)).toHaveLength(2)
+    expect(filter.getFilteredIndices()).toEqual([0, 1])
+  })
+
+  it('keeps unknown netdisk platforms filterable by their raw identifier', () => {
+    const filter = useTorrentFilter()
+    const torrents = [createTorrent({ downloadType: 'netdisk', netdiskPlatform: 'mystery', title: '未知网盘' })]
+
+    filter.filterCardData(torrents)
+
+    expect(filter.filterOptions.netdisk).toEqual(['mystery'])
+    filter.filterForm.netdisk = ['mystery']
+    expect(filter.filterCardData(torrents)).toHaveLength(1)
+  })
+
+  it('never merges netdisk share items into groups, while PT grouping stays intact', () => {
+    const filter = useTorrentFilter()
+    const quarkA = createTorrent({
+      downloadType: 'netdisk',
+      netdiskPlatform: 'quark',
+      title: '夸克分享 A',
+      pageUrl: 'https://example.test/quark-a',
+    })
+    const quarkB = createTorrent({
+      downloadType: 'netdisk',
+      netdiskPlatform: 'quark',
+      title: '夸克分享 B',
+      pageUrl: 'https://example.test/quark-b',
+    })
+    const ptA = createTorrent({ title: 'PT 同名 A' })
+    const ptB = createTorrent({ title: 'PT 同名 B' })
+    const torrents = [quarkA, quarkB, ptA, ptB]
+
+    const results = filter.filterCardData(torrents)
+
+    // 网盘分享各自独立成卡且不产生 more；两条 PT 资源仍合并为一组
+    expect(results).toHaveLength(3)
+    const byTitle = Object.fromEntries(results.map(item => [item.torrent_info.title, item]))
+    expect(byTitle['夸克分享 A']).not.toHaveProperty('more')
+    expect(byTitle['夸克分享 B']).not.toHaveProperty('more')
+    expect(byTitle['PT 同名 A']).toHaveProperty('more', [ptB])
+    // 四个原始资源的索引都要保留
+    expect(filter.getFilteredIndices().sort()).toEqual([0, 1, 2, 3])
+  })
+
+  it('keeps netdisk cards ungrouped and ordered on appended pages', () => {
+    const filter = useTorrentFilter()
+    const pageOne = [
+      createTorrent({ downloadType: 'netdisk', netdiskPlatform: 'quark', title: '第一页网盘', priOrder: 1 }),
+      createTorrent({ title: '第一页 PT A', priOrder: 2 }),
+      createTorrent({ title: '第一页 PT B', priOrder: 3 }),
+    ]
+    const firstResults = filter.filterCardData(pageOne)
+    expect(firstResults).toHaveLength(2)
+    expect(filter.getFilteredIndices()).toEqual([0, 1, 2])
+
+    const pageTwo = [...pageOne, createTorrent({ downloadType: 'netdisk', netdiskPlatform: 'baidu', title: '第二页网盘', priOrder: 0 })]
+    const secondResults = filter.filterCardData(pageTwo, true)
+
+    expect(secondResults).toHaveLength(3)
+    // 续页保持已展示卡片的相对顺序，新卡片追加在后
+    expect(secondResults.map(item => item.torrent_info.title)).toEqual(['第一页网盘', '第一页 PT A', '第二页网盘'])
+    secondResults.forEach(item => {
+      if (item.torrent_info.download_type === 'netdisk') {
+        expect(item).not.toHaveProperty('more')
+      }
+    })
+    expect(filter.getFilteredIndices()).toEqual([0, 1, 2, 3])
   })
 })
