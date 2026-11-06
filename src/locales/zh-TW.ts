@@ -5849,6 +5849,10 @@ export default {
     netdiskTransferFirst: '轉存優先',
     netdiskTransferFirstHint: '啟用後先將檔案轉存到自己的網盤再下載，更穩定但會佔用網盤空間，預設關閉',
     netdiskPlatformLimitHint: '平台級並發上限由平台決定：迅雷固定為 8，其餘平台可到 512，超出時將按實際上限生效',
+    netdiskPlatformOverrides: '按平台覆蓋',
+    netdiskPlatformOverridesHint: '留空則使用上方的預設值；迅雷任務總連線數會被限制在 8 條',
+    netdiskThreadsShort: '每檔案連線數',
+    netdiskMaxTasksShort: '並發檔案數',
   },
   netdisk: {
     title: '網盤帳號',

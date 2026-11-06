@@ -36,6 +36,9 @@ const emit = defineEmits(['update:modelValue', 'close', 'change', 'done'])
 // 提示框
 const $toast = useToast()
 
+// 网盘平台顺序：与后端 NetdiskPlatform 枚举一致，用于按平台覆盖并发参数。
+const netdiskPlatformKeys = ['quark', 'uc', 'pan139', 'pan123', 'pan115', 'guangya', 'baidu', 'xunlei'] as const
+
 // 表单
 const downloaderForm = ref()
 
@@ -159,6 +162,8 @@ function initializeDownloaderConfigDefaults() {
   if (downloaderInfo.value.type === 'netdisk') {
     if (downloaderInfo.value.config.threads === undefined) downloaderInfo.value.config.threads = 8
     if (downloaderInfo.value.config.max_tasks === undefined) downloaderInfo.value.config.max_tasks = 3
+    if (!downloaderInfo.value.config.platform_threads) downloaderInfo.value.config.platform_threads = {}
+    if (!downloaderInfo.value.config.platform_max_tasks) downloaderInfo.value.config.platform_max_tasks = {}
     if (downloaderInfo.value.config.rate_limit === undefined) downloaderInfo.value.config.rate_limit = 0
     if (downloaderInfo.value.config.preempt === undefined) downloaderInfo.value.config.preempt = true
     if (downloaderInfo.value.config.multi_source === undefined) downloaderInfo.value.config.multi_source = false
@@ -554,6 +559,39 @@ onMounted(() => {
                 active
                 prepend-inner-icon="mdi-file-multiple"
               />
+            </VCol>
+            <VCol cols="12">
+              <div class="text-subtitle-2 mt-2">{{ t('downloader.netdiskPlatformOverrides') }}</div>
+              <div class="text-caption text-medium-emphasis">
+                {{ t('downloader.netdiskPlatformOverridesHint') }}
+              </div>
+            </VCol>
+            <VCol v-for="platform in netdiskPlatformKeys" :key="platform" cols="12" md="6">
+              <VRow dense align="center">
+                <VCol cols="4" class="text-body-2">{{ t(`torrent.netdiskPlatform.${platform}`) }}</VCol>
+                <VCol cols="4">
+                  <VTextField
+                    v-model.number="downloaderInfo.config.platform_threads[platform]"
+                    type="number"
+                    min="1"
+                    max="512"
+                    step="1"
+                    density="compact"
+                    :label="t('downloader.netdiskThreadsShort')"
+                  />
+                </VCol>
+                <VCol cols="4">
+                  <VTextField
+                    v-model.number="downloaderInfo.config.platform_max_tasks[platform]"
+                    type="number"
+                    min="1"
+                    max="64"
+                    step="1"
+                    density="compact"
+                    :label="t('downloader.netdiskMaxTasksShort')"
+                  />
+                </VCol>
+              </VRow>
             </VCol>
             <VCol cols="12" md="6">
               <VTextField

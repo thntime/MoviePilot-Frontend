@@ -6021,6 +6021,10 @@ export default {
     netdiskTransferFirst: 'Transfer First',
     netdiskTransferFirstHint: 'When enabled, files are transferred to your own cloud drive before downloading. More stable but uses cloud drive space; off by default',
     netdiskPlatformLimitHint: 'Per-platform concurrency caps apply: Thunder is fixed at 8, other platforms allow up to 512; values above the cap are clamped',
+    netdiskPlatformOverrides: 'Per-platform Overrides',
+    netdiskPlatformOverridesHint: 'Leave blank to use the defaults above; Thunder tasks are capped at 8 total connections',
+    netdiskThreadsShort: 'Connections per File',
+    netdiskMaxTasksShort: 'Concurrent Files',
   },
   netdisk: {
     title: 'Netdisk Accounts',

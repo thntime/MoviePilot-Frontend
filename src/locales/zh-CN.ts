@@ -5857,6 +5857,10 @@ export default {
     netdiskTransferFirst: '转存优先',
     netdiskTransferFirstHint: '启用后先将文件转存到自己的网盘再下载，更稳定但会占用网盘空间，默认关闭',
     netdiskPlatformLimitHint: '平台级并发上限由平台决定：迅雷固定为 8，其余平台可到 512，超出时将按实际上限生效',
+    netdiskPlatformOverrides: '按平台覆盖',
+    netdiskPlatformOverridesHint: '留空则使用上方的默认值；迅雷任务总连接数会被限制在 8 条',
+    netdiskThreadsShort: '每文件连接数',
+    netdiskMaxTasksShort: '并发文件数',
   },
   netdisk: {
     title: '网盘账号',
