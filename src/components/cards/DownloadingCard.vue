@@ -142,6 +142,9 @@ const stateIcon = computed(() => {
   return 'mdi-pause'
 })
 const errorText = computed(() => (isDownloading.value ? '' : String(props.info?.error || '').trim()))
+const capacityErrorText = computed(() =>
+  String((props.info as (DownloadingInfo & { capacity_error?: string }) | undefined)?.capacity_error || '').trim(),
+)
 
 /** 剩余时间只对下载中的任务有意义；下载器未给出时不展示占位符。 */
 const remainingTimeText = computed(() => {
@@ -309,6 +312,10 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                 </template>
               </div>
 
+              <div v-if="capacityErrorText" class="downloading-card__capacity-error" :title="capacityErrorText">
+                <VIcon icon="mdi-alert-outline" size="14" />
+                <span>{{ capacityErrorText }}</span>
+              </div>
               <div v-if="isFailed && errorText" class="downloading-card__error" :title="errorText">
                 {{ errorText }}
               </div>
@@ -570,6 +577,28 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   overflow: hidden;
   flex: 1 1 auto;
   text-overflow: ellipsis;
+}
+
+.downloading-card__capacity-error {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  color: rgb(var(--v-theme-warning));
+  font-size: 0.72rem;
+  font-weight: 600;
+  gap: 0.25rem;
+  line-height: 1.35;
+}
+
+.downloading-card__capacity-error .v-icon {
+  flex: 0 0 auto;
+}
+
+.downloading-card__capacity-error span {
+  overflow: hidden;
+  min-inline-size: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .downloading-card__progress {

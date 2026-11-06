@@ -1150,8 +1150,13 @@ html[data-theme-radius='extra'] {
     ),
     rgb(var(--v-theme-surface)) !important;
   box-shadow: var(--app-overlay-shadow);
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)) !important;
+  color: rgba(var(--v-theme-on-surface, 0, 0, 0), var(--v-high-emphasis-opacity, 0.87)) !important;
   font-family: inherit;
+}
+
+// Toast 挂载在 .v-application 之外，取不到 Vuetify 主题变量；暗色下显式给白色文字。
+html[data-glass-color-scheme='dark'] .Vue-Toastification__toast {
+  color: rgba(255, 255, 255, 0.87) !important;
 }
 
 .Vue-Toastification__toast--default,

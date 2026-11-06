@@ -158,9 +158,11 @@ function initializeDownloaderConfigDefaults() {
   }
   if (downloaderInfo.value.type === 'netdisk') {
     if (downloaderInfo.value.config.threads === undefined) downloaderInfo.value.config.threads = 8
+    if (downloaderInfo.value.config.max_tasks === undefined) downloaderInfo.value.config.max_tasks = 3
     if (downloaderInfo.value.config.rate_limit === undefined) downloaderInfo.value.config.rate_limit = 0
     if (downloaderInfo.value.config.preempt === undefined) downloaderInfo.value.config.preempt = true
     if (downloaderInfo.value.config.multi_source === undefined) downloaderInfo.value.config.multi_source = false
+    if (downloaderInfo.value.config.transfer_first === undefined) downloaderInfo.value.config.transfer_first = false
   }
 }
 
@@ -541,6 +543,20 @@ onMounted(() => {
             </VCol>
             <VCol cols="12" md="6">
               <VTextField
+                v-model.number="downloaderInfo.config.max_tasks"
+                type="number"
+                min="1"
+                max="8"
+                step="1"
+                :label="t('downloader.netdiskMaxTasks')"
+                :hint="t('downloader.netdiskMaxTasksHint')"
+                persistent-hint
+                active
+                prepend-inner-icon="mdi-file-multiple"
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VTextField
                 v-model.number="downloaderInfo.config.rate_limit"
                 type="number"
                 min="0"
@@ -566,6 +582,15 @@ onMounted(() => {
                 v-model="downloaderInfo.config.multi_source"
                 :label="t('downloader.netdiskMultiSource')"
                 :hint="t('downloader.netdiskMultiSourceHint')"
+                persistent-hint
+                active
+              />
+            </VCol>
+            <VCol cols="12" md="6">
+              <VSwitch
+                v-model="downloaderInfo.config.transfer_first"
+                :label="t('downloader.netdiskTransferFirst')"
+                :hint="t('downloader.netdiskTransferFirstHint')"
                 persistent-hint
                 active
               />

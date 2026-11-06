@@ -26,6 +26,13 @@ export interface NetdiskAccount {
   nickname: string
   quota_used: number
   quota_total: number
+  /** 最近一次传输速度采样（字节/秒），无采样为 0。 */
+  speed: number
+}
+
+/** 单账号详情，包含仅超级管理员可读取的明文凭据。 */
+export interface NetdiskAccountDetail extends NetdiskAccount {
+  credential: Record<string, string>
 }
 
 /** 扫码登录会话。 */
@@ -77,6 +84,7 @@ interface NetdiskAccountPayload {
 export interface NetdiskAccountBaseRequest {
   name?: string
   is_primary?: boolean
+  account_id?: number
 }
 
 export interface NetdiskCookieAccountRequest extends NetdiskAccountBaseRequest {
@@ -93,6 +101,7 @@ export interface NetdiskPasswordAccountRequest extends NetdiskAccountBaseRequest
 export interface NetdiskSmsSendRequest {
   platform: string
   phone: string
+  account_id?: number
 }
 
 export interface NetdiskSmsLoginRequest extends NetdiskAccountBaseRequest {
@@ -110,7 +119,6 @@ export interface NetdiskSmsSendResult {
 
 export interface NetdiskQrStartRequest extends NetdiskAccountBaseRequest {
   platform: string
-  account_id?: number
 }
 
 export interface NetdiskAccountUpdateRequest {
@@ -134,6 +142,14 @@ export async function fetchNetdiskAccounts(platform?: string): Promise<NetdiskAc
     feedback: 'silent',
   })
   return payload?.accounts ?? []
+}
+
+/** 查询单账号详情与明文凭据。 */
+export async function fetchNetdiskAccount(accountId: number): Promise<NetdiskAccountDetail> {
+  const payload = await api.get<NetdiskAccountPayload, NetdiskAccountPayload>(`netdisk/accounts/${accountId}`, {
+    feedback: 'silent',
+  })
+  return payload.account as NetdiskAccountDetail
 }
 
 /** 粘贴 Cookie 新增账号。 */
@@ -274,6 +290,24 @@ export function deleteNetdiskAccount(accountId: number): Promise<unknown> {
 /** 检测账号登录态。 */
 export function probeNetdiskAccount(accountId: number): Promise<unknown> {
   return api.post(`netdisk/accounts/${accountId}/probe`, undefined, { feedback: 'silent' })
+}
+
+/** 全部账号有效性检查的响应负载。 */
+export interface NetdiskAccountsCheckPayload {
+  accounts: NetdiskAccount[]
+  checked: number
+  active: number
+  expired: number
+  failed: number
+}
+
+/** 一键检查所有账号有效性并刷新配额，返回最新账号列表与汇总统计。 */
+export async function checkAllNetdiskAccounts(): Promise<NetdiskAccountsCheckPayload> {
+  return api.post<NetdiskAccountsCheckPayload, NetdiskAccountsCheckPayload>(
+    'netdisk/accounts/check',
+    undefined,
+    { feedback: 'silent' },
+  )
 }
 
 /** 刷新账号令牌。 */

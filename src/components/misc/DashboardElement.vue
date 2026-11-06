@@ -62,6 +62,7 @@ const builtInDashboardComponentLoaders: Record<string, DashboardComponentLoader>
   recentImports: () => import('@/views/dashboard/DashboardRecentImports.vue'),
   quickActions: () => import('@/views/dashboard/DashboardQuickActions.vue'),
   systemInfo: () => import('@/views/dashboard/DashboardSystemInfo.vue'),
+  netdiskStatus: () => import('@/views/dashboard/DashboardNetdiskStatus.vue'),
 }
 
 const builtInDashboardComponentPromises = new Map<string, Promise<any>>()
@@ -107,6 +108,7 @@ const MediaServerLatest = createAsyncDashboardComponent('latest')
 const DashboardRecentImports = createAsyncDashboardComponent('recentImports')
 const DashboardQuickActions = createAsyncDashboardComponent('quickActions')
 const DashboardSystemInfo = createAsyncDashboardComponent('systemInfo')
+const DashboardNetdiskStatus = createAsyncDashboardComponent('netdiskStatus')
 
 // 输入参数
 const props = defineProps({
@@ -255,6 +257,7 @@ onUnmounted(() => {
   <DashboardRecentImports v-else-if="config?.id === 'recentImports'" />
   <DashboardQuickActions v-else-if="config?.id === 'quickActions'" />
   <DashboardSystemInfo v-else-if="config?.id === 'systemInfo'" :allow-refresh="props.allowRefresh" />
+  <DashboardNetdiskStatus v-else-if="config?.id === 'netdiskStatus'" :allow-refresh="props.allowRefresh" />
   <!-- 插件仪表板 -->
   <template v-else-if="!isNullOrEmptyObject(props.config)">
     <!-- Vue 渲染模式 -->

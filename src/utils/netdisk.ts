@@ -31,6 +31,35 @@ const netdiskPlatformStyles: Record<string, string> = {
   xunlei: 'chip-netdisk-xunlei',
 }
 
+// 平台图标集中维护，保证八个平台在控制台中具有稳定且不同的视觉标识。
+const netdiskPlatformIcons: Record<string, string> = {
+  quark: 'mdi-cloud-outline',
+  uc: 'mdi-cloud-circle-outline',
+  pan139: 'mdi-cellphone-arrow-down',
+  pan123: 'mdi-numeric-1-box-multiple-outline',
+  pan115: 'mdi-harddisk',
+  guangya: 'mdi-weather-sunny',
+  baidu: 'mdi-paw',
+  xunlei: 'mdi-lightning-bolt-outline',
+}
+
+/** 返回平台图标，未知平台使用通用云盘图标。 */
+export function getNetdiskPlatformIcon(platform: string | undefined): string {
+  const canonical = canonicalNetdiskPlatform(platform)
+  return (canonical && netdiskPlatformIcons[canonical]) || 'mdi-cloud-question-outline'
+}
+
+/** 按统一平台顺序排序，未知平台按标识排在末尾。 */
+export function compareNetdiskPlatforms(a: string, b: string): number {
+  const order = NETDISK_PLATFORMS as readonly string[]
+  const ia = order.indexOf(canonicalNetdiskPlatform(a))
+  const ib = order.indexOf(canonicalNetdiskPlatform(b))
+  if (ia === -1 && ib === -1) return a.localeCompare(b)
+  if (ia === -1) return 1
+  if (ib === -1) return -1
+  return ia - ib
+}
+
 /** 返回网盘平台的国际化展示名，未知平台回退显示原始标识，空值返回空串。 */
 export function getNetdiskPlatformName(t: ComposerTranslation, platform: string | undefined): string {
   const canonical = canonicalNetdiskPlatform(platform)
@@ -70,6 +99,80 @@ export function getNetdiskQuotaPercent(quotaUsed: number | undefined, quotaTotal
   const total = Number(quotaTotal || 0)
   if (total <= 0) return 0
   return Math.min(100, Math.round((Number(quotaUsed || 0) / total) * 100))
+}
+
+/** 单个网盘平台在仪表盘上的聚合状态。 */
+export interface NetdiskPlatformSummary {
+  platform: string
+  total: number
+  active: number
+  /** success / warning / error */
+  statusColor: 'success' | 'warning' | 'error'
+  /** 全部账号 quota_total > 0 时的剩余空间之和，否则为 null。 */
+  freeBytes: number | null
+  /** 仅统计 speed > 0 的账号的平均速度（字节/秒），无采样为 null。 */
+  avgSpeed: number | null
+}
+
+/** 按平台聚合网盘账号状态、剩余空间与平均速度，无账号的平台不出现在结果中。 */
+export function summarizeNetdiskPlatforms(
+  accounts: Array<{ platform: string; status: string; quota_used: number; quota_total: number; speed?: number }>,
+): NetdiskPlatformSummary[] {
+  const groups = new Map<
+    string,
+    { total: number; active: number; freeBytes: number; hasQuota: boolean; speedSum: number; speedCount: number }
+  >()
+  for (const account of accounts) {
+    const platform = canonicalNetdiskPlatform(account.platform)
+    if (!platform) continue
+    let summary = groups.get(platform)
+    if (!summary) {
+      summary = { total: 0, active: 0, freeBytes: 0, hasQuota: false, speedSum: 0, speedCount: 0 }
+      groups.set(platform, summary)
+    }
+    summary.total += 1
+    if (account.status === 'active') summary.active += 1
+    const quotaTotal = Number(account.quota_total) || 0
+    if (quotaTotal > 0) {
+      summary.hasQuota = true
+      summary.freeBytes += Math.max(quotaTotal - (Number(account.quota_used) || 0), 0)
+    }
+    const speed = Number(account.speed) || 0
+    if (speed > 0) {
+      summary.speedSum += speed
+      summary.speedCount += 1
+    }
+  }
+  const result: NetdiskPlatformSummary[] = []
+  for (const [platform, summary] of groups) {
+    result.push({
+      platform,
+      total: summary.total,
+      active: summary.active,
+      statusColor: summary.active === summary.total ? 'success' : summary.active === 0 ? 'error' : 'warning',
+      freeBytes: summary.hasQuota ? summary.freeBytes : null,
+      avgSpeed: summary.speedCount > 0 ? summary.speedSum / summary.speedCount : null,
+    })
+  }
+  result.sort((a, b) => compareNetdiskPlatforms(a.platform, b.platform))
+  return result
+}
+
+/** 格式化网盘剩余空间：>=1TiB 用 T，否则用 G，保留两位小数且无空格；负数按 0 处理。 */
+export function formatNetdiskFreeSpace(bytes: number): string {
+  const safeBytes = Math.max(0, Number(bytes) || 0)
+  if (safeBytes >= 1024 ** 4) return `${(safeBytes / 1024 ** 4).toFixed(2)}T`
+  return `${(safeBytes / 1024 ** 3).toFixed(2)}G`
+}
+
+/** 格式化网盘传输速度：按 1024 进位，B/s 取整、KB/s 及以上保留一位小数，无采样返回 --。 */
+export function formatNetdiskSpeed(bytesPerSecond: number): string {
+  const safeSpeed = Number(bytesPerSecond) || 0
+  if (safeSpeed <= 0) return '--'
+  if (safeSpeed < 1024) return `${Math.round(safeSpeed)} B/s`
+  if (safeSpeed < 1024 ** 2) return `${(safeSpeed / 1024).toFixed(1)} KB/s`
+  if (safeSpeed < 1024 ** 3) return `${(safeSpeed / 1024 ** 2).toFixed(1)} MB/s`
+  return `${(safeSpeed / 1024 ** 3).toFixed(1)} GB/s`
 }
 
 /** 完整日期时间：账号检测与过期都精确到分钟，避免只显示月日造成误解。 */

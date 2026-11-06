@@ -485,18 +485,41 @@ describe('DownloadingCard netdisk source and failure state', () => {
   it('shows the netdisk platform with the share code instead of the raw share title', async () => {
     await renderCard(downloading({ netdisk_platform: 'xunlei', share_code: 'VP5RkWv5', title: 'xunlei:VP5RkWv5' }))
 
-    expect(screen.getByText('迅雷：VP5RkWv5')).toBeInTheDocument()
+    expect(screen.getByText(/迅雷：/)).toBeInTheDocument()
+    expect(screen.getByText(/VP5RkWv5/)).toBeInTheDocument()
     expect(screen.queryByText('xunlei:VP5RkWv5')).not.toBeInTheDocument()
   })
 
-  it('renders a failed task with its reason instead of pretending it is paused', async () => {
+  it('keeps the failure reason in a tooltip so cards keep the same height', async () => {
     const { container } = await renderCard(
       downloading({ state: 'error', error: '分片 3 重试次数超限：连接超时', netdisk_platform: 'quark', share_code: 'abc123' }),
     )
 
     expect(screen.getByText('下载失败')).toBeInTheDocument()
-    expect(screen.getByText('分片 3 重试次数超限：连接超时')).toBeInTheDocument()
+    // 失败原因只在悬停提示里，卡片正文不再为它预留高度。
+    expect(container.textContent).not.toContain('分片 3 重试次数超限：连接超时')
+    expect(container.querySelector('.downloading-card__error')).toBeNull()
+    expect(container.querySelector('.downloading-card__progress-state')).toHaveClass(
+      'downloading-card__progress-state--has-error',
+    )
     expect(container.querySelector('.downloading-card__progress')).toHaveClass('downloading-card__progress--failed')
     expect(actionButtons(container).toggleButton).toHaveAccessibleName('重试')
+  })
+
+  it('links the highlighted share code to the netdisk share url', async () => {
+    await renderCard(
+      downloading({
+        netdisk_platform: 'uc',
+        share_code: '5bef20233b194',
+        share_url: 'https://drive.uc.cn/s/5bef20233b194',
+        title: 'uc:5bef20233b194',
+      }),
+    )
+
+    expect(screen.getByText(/UC：/)).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: '5bef20233b194' })
+    expect(link).toHaveAttribute('href', 'https://drive.uc.cn/s/5bef20233b194')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveClass('downloading-card__share-link')
   })
 })

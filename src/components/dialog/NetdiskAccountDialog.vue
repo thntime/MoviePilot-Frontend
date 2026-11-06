@@ -16,7 +16,6 @@ import {
   sendNetdiskQrInput,
   sendNetdiskSmsCode,
   startNetdiskQrLogin,
-  updateNetdiskAccount,
   type NetdiskAccount,
   type NetdiskPlatformInfo,
   type NetdiskQrSession,
@@ -25,6 +24,7 @@ import {
 import { getApiBusinessErrorMessage } from '@/api/client'
 import { requiredValidator } from '@/@validators'
 import { doneNProgress, startNProgress } from '@/api/nprogress'
+import { getNetdiskPlatformIcon, getNetdiskPlatformName } from '@/utils/netdisk'
 
 // 国际化
 const { t } = useI18n()
@@ -60,7 +60,6 @@ const selectedPlatform = ref(props.account?.platform ?? props.platform ?? '')
 const loginMethod = ref<LoginMethod>('cookie')
 
 // 表单数据；凭据保存后不回显
-const accountName = ref(props.account?.name ?? '')
 const isPrimary = ref(props.account?.is_primary ?? false)
 const cookieValue = ref('')
 const username = ref('')
@@ -79,7 +78,15 @@ let smsTimer: ReturnType<typeof setInterval> | undefined
 const submitting = ref(false)
 
 // 平台选项
-const platformItems = computed(() => props.platforms.map(item => ({ title: item.platform, value: item.platform })))
+const platformItems = computed(() =>
+  props.platforms.map(item => ({
+    title: getNetdiskPlatformName(t, item.platform),
+    value: item.platform,
+    props: { prependIcon: getNetdiskPlatformIcon(item.platform) },
+  })),
+)
+const selectedPlatformName = computed(() => getNetdiskPlatformName(t, selectedPlatform.value))
+const accountIdPayload = computed(() => (props.oper === 'edit' ? props.account?.id : undefined))
 
 // 当前平台能力描述
 const platformInfo = computed(() => props.platforms.find(item => item.platform === selectedPlatform.value))
@@ -190,8 +197,8 @@ async function startQrLogin() {
   try {
     const session = await startNetdiskQrLogin({
       platform: selectedPlatform.value,
-      name: accountName.value.trim() || undefined,
       is_primary: isPrimary.value || undefined,
+      account_id: accountIdPayload.value,
     })
     qrSession.value = session
     lastFrameAt = 0
@@ -509,8 +516,8 @@ async function submitCookie() {
     await createNetdiskCookieAccount({
       platform: selectedPlatform.value,
       cookie: cookieValue.value.trim(),
-      name: accountName.value.trim() || undefined,
       is_primary: isPrimary.value || undefined,
+      account_id: accountIdPayload.value,
     })
     $toast.success(t('netdisk.addSuccess'))
     emit('save')
@@ -529,8 +536,8 @@ async function submitCookieCloud() {
   try {
     await importNetdiskCookieCloudAccount({
       platform: selectedPlatform.value,
-      name: accountName.value.trim() || undefined,
       is_primary: isPrimary.value || undefined,
+      account_id: accountIdPayload.value,
     })
     $toast.success(t('netdisk.addSuccess'))
     emit('save')
@@ -555,8 +562,8 @@ async function submitPassword() {
       platform: selectedPlatform.value,
       username: username.value.trim(),
       password: password.value,
-      name: accountName.value.trim() || undefined,
       is_primary: isPrimary.value || undefined,
+      account_id: accountIdPayload.value,
     })
     $toast.success(t('netdisk.addSuccess'))
     emit('save')
@@ -579,6 +586,7 @@ async function sendSmsCode() {
     const result = await sendNetdiskSmsCode({
       platform: selectedPlatform.value,
       phone: smsPhone.value.trim(),
+      account_id: accountIdPayload.value,
     })
     smsVerificationId.value = result.sms_verification_id
     $toast.success(t('netdisk.sms.codeSent'))
@@ -609,37 +617,13 @@ async function submitSms() {
       phone: smsPhone.value.trim(),
       code: smsCode.value.trim(),
       verification_id: smsVerificationId.value,
-      name: accountName.value.trim() || undefined,
       is_primary: isPrimary.value || undefined,
+      account_id: accountIdPayload.value,
     })
     $toast.success(t('netdisk.addSuccess'))
     emit('save')
   } catch (error) {
     $toast.error(getApiBusinessErrorMessage(error) ?? t('netdisk.addFailed'))
-  } finally {
-    submitting.value = false
-    doneNProgress()
-  }
-}
-
-/** 保存编辑结果；凭据留空表示不修改。 */
-async function submitEdit() {
-  if (!props.account || !accountName.value.trim()) {
-    $toast.warning(t('netdisk.nameRequired'))
-    return
-  }
-  submitting.value = true
-  startNProgress()
-  try {
-    await updateNetdiskAccount(props.account.id, {
-      name: accountName.value.trim(),
-      is_primary: isPrimary.value,
-      cookie: cookieValue.value.trim() || undefined,
-    })
-    $toast.success(t('netdisk.updateSuccess', { name: accountName.value.trim() }))
-    emit('save')
-  } catch (error) {
-    $toast.error(getApiBusinessErrorMessage(error) ?? t('netdisk.updateFailed', { name: accountName.value.trim() }))
   } finally {
     submitting.value = false
     doneNProgress()
@@ -672,7 +656,7 @@ onBeforeUnmount(() => {
         <VCardTitle>
           {{ oper === 'add' ? t('netdisk.actions.add') : t('netdisk.actions.edit') }}
         </VCardTitle>
-        <VCardSubtitle>{{ oper === 'edit' ? account?.name : selectedPlatform }}</VCardSubtitle>
+        <VCardSubtitle>{{ selectedPlatformName }}</VCardSubtitle>
       </VCardItem>
       <VDialogCloseBtn @click="handleClose" />
       <VDivider />
@@ -688,17 +672,7 @@ onBeforeUnmount(() => {
                 :disabled="oper === 'edit'"
                 :hint="t('netdisk.hints.platform')"
                 persistent-hint
-                prepend-inner-icon="mdi-cloud-outline"
-              />
-            </VCol>
-            <VCol cols="12" md="6">
-              <VTextField
-                v-model="accountName"
-                :label="t('netdisk.fields.name')"
-                :rules="oper === 'edit' ? [requiredValidator] : []"
-                :hint="t('netdisk.hints.name')"
-                persistent-hint
-                prepend-inner-icon="mdi-tag-outline"
+                :prepend-inner-icon="getNetdiskPlatformIcon(selectedPlatform)"
               />
             </VCol>
             <VCol cols="12" md="6">
@@ -711,33 +685,9 @@ onBeforeUnmount(() => {
             </VCol>
           </VRow>
 
-          <!-- 编辑模式：仅名称、主账号与可选凭据更新 -->
-          <template v-if="oper === 'edit'">
-            <VRow>
-              <VCol cols="12">
-                <VTextField
-                  v-model="cookieValue"
-                  :type="showCookie ? 'text' : 'password'"
-                  autocomplete="new-password"
-                  :label="t('netdisk.fields.cookie')"
-                  :hint="t('netdisk.hints.cookieUpdate')"
-                  persistent-hint
-                  prepend-inner-icon="mdi-cookie"
-                  :append-inner-icon="showCookie ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
-                  @click:append-inner="showCookie = !showCookie"
-                />
-              </VCol>
-            </VRow>
-            <div class="d-flex justify-end mt-4">
-              <VBtn color="primary" prepend-icon="mdi-content-save" :loading="submitting" @click="submitEdit">
-                {{ t('common.save') }}
-              </VBtn>
-            </div>
-          </template>
-
-          <!-- 新增模式：四种登录方式 -->
-          <template v-else>
-            <VTabs v-model="loginMethod" show-arrows class="v-tabs-pill mt-2">
+          <!-- 新增与编辑共用四种登录方式；编辑提交会携带 account_id。 -->
+          <!-- 注意：此处不能使用无指令的 <template> 包裹，Vue 3.5 会将其编译为原生 template 元素导致内容不渲染。 -->
+          <VTabs v-model="loginMethod" show-arrows class="v-tabs-pill mt-2">
               <VTab
                 v-for="method in loginMethods"
                 :key="method.value"
@@ -933,9 +883,8 @@ onBeforeUnmount(() => {
                           ref="frameImageEl"
                           :src="qrDisplaySrc"
                           alt=""
-                          class="rounded-lg border"
+                          class="rounded-lg border qr-page-image"
                           draggable="false"
-                          style="max-width: 100%; max-height: 60vh; object-fit: contain; cursor: crosshair"
                           @dragstart.prevent
                         />
                         <input
@@ -1034,9 +983,8 @@ onBeforeUnmount(() => {
                     </VBtn>
                   </template>
                 </div>
-              </VWindowItem>
-            </VWindow>
-          </template>
+            </VWindowItem>
+          </VWindow>
         </VForm>
       </VCardText>
     </VCard>
@@ -1046,17 +994,27 @@ onBeforeUnmount(() => {
 <style scoped>
 .qr-page-capture {
   position: relative;
-  display: inline-block;
-  max-width: 100%;
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 100%;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
+.qr-page-image {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  cursor: crosshair;
+}
+
 .qr-vnc-frame {
-  width: 100%;
-  height: 60vh;
-  min-height: 420px;
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: 16 / 10;
+  block-size: auto;
+  min-block-size: 0;
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 8px;
   background: #000;

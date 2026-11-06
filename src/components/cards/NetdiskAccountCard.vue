@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { NetdiskAccount } from '@/api/netdisk'
 import { useNetdiskAccountActions } from '@/composables/useNetdiskAccountActions'
 import { formatFileSize } from '@/@core/utils/formatters'
-import { formatNetdiskDateTime, getNetdiskQuotaPercent, getNetdiskStatusMeta } from '@/utils/netdisk'
+import { formatNetdiskDateTime, formatNetdiskFreeSpace, getNetdiskPlatformName, getNetdiskQuotaPercent, getNetdiskStatusMeta } from '@/utils/netdisk'
 
 // 国际化
 const { t } = useI18n()
@@ -21,8 +21,7 @@ const props = defineProps({
   },
 })
 
-// 定义触发的自定义事件
-const emit = defineEmits(['update', 'edit', 'browse'])
+const emit = defineEmits(['update', 'edit'])
 
 // 账号动作（探测/刷新/设主/删除），与详情面板共用同一套逻辑
 const { probing, refreshing, settingPrimary, probeAccount, refreshAccount, setPrimary, deleteAccount } =
@@ -31,16 +30,19 @@ const { probing, refreshing, settingPrimary, probeAccount, refreshAccount, setPr
 // 状态展示：active 有效，expired 已过期，其余视为未验证
 const statusMeta = computed(() => getNetdiskStatusMeta(t, props.account.status))
 
-// 过期时间与最近检测时间
-const expiresAtText = computed(() =>
-  props.account.expires_at ? formatNetdiskDateTime(props.account.expires_at) : t('netdisk.expiresUnknown'),
-)
+// 最近检测时间
 const lastCheckedAtText = computed(() =>
   props.account.last_checked_at ? formatNetdiskDateTime(props.account.last_checked_at) : t('netdisk.never'),
 )
 
 // 空间使用比例
 const quotaPercent = computed(() => getNetdiskQuotaPercent(props.account.quota_used, props.account.quota_total))
+
+// 剩余空间文本：负值按 0 处理，与平台分组的汇总口径一致
+const quotaFreeText = computed(() => {
+  if (!(props.account.quota_total > 0)) return ''
+  return formatNetdiskFreeSpace(Math.max(props.account.quota_total - props.account.quota_used, 0))
+})
 </script>
 
 <template>
@@ -48,7 +50,7 @@ const quotaPercent = computed(() => getNetdiskQuotaPercent(props.account.quota_u
     <VCardText class="app-card-summary">
       <div class="app-card-summary__content">
         <div class="app-card-summary__title-row">
-          <span class="app-card-summary__title text-h6">{{ account.nickname || account.name }}</span>
+          <span class="app-card-summary__title text-h6">{{ account.nickname || getNetdiskPlatformName(t, account.platform) }}</span>
           <VChip v-if="account.is_primary" size="x-small" color="warning" variant="tonal" class="shrink-0">
             {{ t('netdisk.primary') }}
           </VChip>
@@ -58,14 +60,14 @@ const quotaPercent = computed(() => getNetdiskQuotaPercent(props.account.quota_u
           <span class="text-caption text-medium-emphasis">
             {{ formatFileSize(account.quota_used) }} / {{ formatFileSize(account.quota_total) }}
           </span>
+          <span v-if="quotaFreeText" class="text-caption text-medium-emphasis shrink-0">
+            {{ t('netdisk.detail.quotaFree', { free: quotaFreeText }) }}
+          </span>
         </div>
         <div class="app-card-summary__meta text-sm">
           <span class="app-card-summary__meta-item d-inline-flex align-center gap-1">
             <VIcon :icon="statusMeta.icon" :color="statusMeta.color" size="16" />
             {{ statusMeta.text }}
-          </span>
-          <span class="app-card-summary__meta-item">
-            {{ t('netdisk.expiresAt') }}：{{ expiresAtText }}
           </span>
           <span class="app-card-summary__meta-item">
             {{ t('netdisk.lastCheckedAt') }}：{{ lastCheckedAtText }}
@@ -80,9 +82,6 @@ const quotaPercent = computed(() => getNetdiskQuotaPercent(props.account.quota_u
             </IconBtn>
           </template>
           <VList density="compact" class="px-2">
-            <VListItem prepend-icon="mdi-folder-open-outline" @click="emit('browse')">
-              <VListItemTitle>{{ t('netdisk.actions.browse') }}</VListItemTitle>
-            </VListItem>
             <VListItem prepend-icon="mdi-file-edit-outline" @click="emit('edit')">
               <VListItemTitle>{{ t('netdisk.actions.edit') }}</VListItemTitle>
             </VListItem>

@@ -1,8 +1,10 @@
 <script lang="ts" setup>
 import { useDisplay } from 'vuetify'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
+import { useToast } from 'vue-toastification'
 import {
+  checkAllNetdiskAccounts,
   fetchNetdiskAccounts,
   fetchNetdiskPlatforms,
   type NetdiskAccount,
@@ -11,14 +13,22 @@ import {
 import NetdiskAccountCard from '@/components/cards/NetdiskAccountCard.vue'
 import NetdiskAccountDetail from '@/components/setting/NetdiskAccountDetail.vue'
 import NetdiskAccountList from '@/components/setting/NetdiskAccountList.vue'
+import NetdiskPlatformGroup from '@/components/setting/NetdiskPlatformGroup.vue'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import { useAvailableHeight } from '@/composables/useAvailableHeight'
 import { openSharedDialog } from '@/composables/useSharedDialog'
 import { useSilentSettingRefresh } from '@/composables/useSilentSettingRefresh'
-import { resolveFallbackNetdiskAccountId, resolveInitialNetdiskAccountId } from '@/utils/netdisk'
+import {
+  compareNetdiskPlatforms,
+  resolveFallbackNetdiskAccountId,
+  resolveInitialNetdiskAccountId,
+} from '@/utils/netdisk'
 
 // 国际化
 const { t } = useI18n()
+
+// 轻提示
+const $toast = useToast()
 
 // 响应式断点：桌面（md 及以上）使用主从布局，移动端保留卡片网格
 const { mdAndUp } = useDisplay()
@@ -42,9 +52,10 @@ const platforms = ref<NetdiskPlatformInfo[]>([])
 // 账号列表
 const accounts = ref<NetdiskAccount[]>([])
 
-// 路由
-const router = useRouter()
 const route = useRoute()
+
+// 移动端平台分组默认全部展开；记录用户主动折叠的平台集合。
+const mobileCollapsedPlatforms = ref(new Set<string>())
 
 // 当前选中账号 id（仅桌面主从布局使用；移动端不自动进详情）
 const selectedId = ref<number | null>(null)
@@ -52,9 +63,11 @@ const selectedId = ref<number | null>(null)
 // 是否已应用初始选中（query/主账号/第一个），避免后续刷新覆盖用户选择
 const initialSelectionDone = ref(false)
 
-// 打开该账号的网盘文件页
-function openBrowser(account: NetdiskAccount) {
-  void router.push({ path: '/netdisk', query: { account_id: String(account.id) } })
+function toggleMobilePlatform(platform: string) {
+  const next = new Set(mobileCollapsedPlatforms.value)
+  if (next.has(platform)) next.delete(platform)
+  else next.add(platform)
+  mobileCollapsedPlatforms.value = next
 }
 
 // 是否刷新过
@@ -62,6 +75,9 @@ const isRefreshed = ref(false)
 
 // 是否加载中
 const loading = ref(false)
+
+// 一键检查按钮的加载态
+const checking = ref(false)
 
 // 首次加载失败时保留独立错误态，避免把网络异常显示成空列表
 const loadError = ref(false)
@@ -74,15 +90,7 @@ const groupedAccounts = computed(() => {
     list.push(account)
     groups.set(account.platform, list)
   }
-  const order = platforms.value.map(item => item.platform)
-  return [...groups.entries()].sort((a, b) => {
-    const ia = order.indexOf(a[0])
-    const ib = order.indexOf(b[0])
-    if (ia === -1 && ib === -1) return a[0].localeCompare(b[0])
-    if (ia === -1) return 1
-    if (ib === -1) return -1
-    return ia - ib
-  })
+  return [...groups.entries()].sort((a, b) => compareNetdiskPlatforms(a[0], b[0]))
 })
 
 // 平台能力速查
@@ -123,7 +131,7 @@ function reconcileSelection(snapshot: NetdiskAccount[], pendingSelectId: number 
 }
 
 // 加载平台与账号数据
-async function fetchData(refresh = false, pendingSelectId: number | null = null) {
+async function fetchData(pendingSelectId: number | null = null) {
   if (loading.value) return
   loading.value = true
   if (!isRefreshed.value) loadError.value = false
@@ -147,7 +155,7 @@ async function fetchData(refresh = false, pendingSelectId: number | null = null)
 // 新增保存后：记录刷新前 id 集合，刷新后取差集新 id 选中
 async function onAccountAdd() {
   const beforeIds = new Set(accounts.value.map(account => account.id))
-  await fetchData(true)
+  await fetchData()
   const added = accounts.value.find(account => !beforeIds.has(account.id))
   if (added) {
     selectedId.value = added.id
@@ -157,7 +165,30 @@ async function onAccountAdd() {
 
 // 编辑保存后刷新列表（差集为空，按 id 保持选中）
 function onAccountSave() {
-  fetchData(true)
+  fetchData()
+}
+
+// 一键检查所有账号有效性：成功后整体替换列表并提示汇总，失败保留原列表
+async function checkAll() {
+  if (checking.value) return
+  checking.value = true
+  try {
+    const result = await checkAllNetdiskAccounts()
+    accounts.value = result.accounts ?? []
+    $toast.success(
+      t('netdisk.check.done', {
+        checked: result.checked,
+        active: result.active,
+        expired: result.expired,
+        failed: result.failed,
+      }),
+    )
+  } catch (error) {
+    console.error(error)
+    $toast.error(t('netdisk.check.failed'))
+  } finally {
+    checking.value = false
+  }
 }
 
 // 打开新增账号弹窗
@@ -184,7 +215,7 @@ onMounted(() => {
   fetchData()
 })
 
-useSilentSettingRefresh(() => fetchData(true), {
+useSilentSettingRefresh(() => fetchData(), {
   active: computed(() => props.active),
 })
 </script>
@@ -197,9 +228,19 @@ useSilentSettingRefresh(() => fetchData(true), {
           <VCardTitle>{{ t('netdisk.title') }}</VCardTitle>
           <VCardSubtitle>{{ t('netdisk.description') }}</VCardSubtitle>
           <template #append>
-            <VBtn color="primary" prepend-icon="mdi-cloud-plus-outline" @click="openAddDialog">
-              {{ t('netdisk.actions.add') }}
-            </VBtn>
+            <div class="d-flex gap-2">
+              <VBtn
+                variant="tonal"
+                prepend-icon="mdi-check-circle-outline"
+                :loading="checking"
+                @click="checkAll"
+              >
+                {{ t('netdisk.actions.check') }}
+              </VBtn>
+              <VBtn color="primary" prepend-icon="mdi-cloud-plus-outline" @click="openAddDialog">
+                {{ t('netdisk.actions.add') }}
+              </VBtn>
+            </div>
           </template>
         </VCardItem>
         <VCardText :class="mdAndUp ? 'pa-0' : ''">
@@ -222,9 +263,8 @@ useSilentSettingRefresh(() => fetchData(true), {
                   :key="selectedAccount.id"
                   :account="selectedAccount"
                   :platform-info="platformInfoMap[selectedAccount.platform]"
-                  @update="fetchData(true)"
+                  @update="fetchData()"
                   @edit="openEditDialog(selectedAccount)"
-                  @browse="openBrowser(selectedAccount)"
                 />
                 <div v-else class="netdisk-console__empty">
                   <VIcon icon="mdi-account-box-outline" size="48" color="medium-emphasis" />
@@ -240,23 +280,21 @@ useSilentSettingRefresh(() => fetchData(true), {
             </div>
             <!-- 移动端：平台分组 + 卡片网格 -->
             <template v-else>
-              <div v-for="[platform, list] in groupedAccounts" :key="platform" class="mb-6">
-                <div class="d-flex align-center gap-2 mb-3">
-                  <VIcon icon="mdi-cloud-outline" color="primary" />
-                  <span class="text-h6">{{ platform }}</span>
-                  <VChip v-if="platformInfoMap[platform]" size="x-small" variant="tonal" color="info">
-                    {{ t('netdisk.maxConcurrency', { count: platformInfoMap[platform].max_concurrency }) }}
-                  </VChip>
-                </div>
-                <div class="grid gap-4 grid-site-card">
+              <div v-for="[platform, list] in groupedAccounts" :key="platform" class="mb-3">
+                <NetdiskPlatformGroup
+                  :platform="platform"
+                  :accounts="list"
+                  :expanded="!mobileCollapsedPlatforms.has(platform)"
+                  @toggle="toggleMobilePlatform(platform)"
+                />
+                <div v-if="!mobileCollapsedPlatforms.has(platform)" class="grid gap-4 grid-site-card mt-3">
                   <NetdiskAccountCard
                     v-for="account in list"
                     :key="account.id"
                     :account="account"
                     :supports-refresh="platformInfoMap[account.platform]?.supports_refresh ?? false"
-                    @update="fetchData(true)"
+                    @update="fetchData()"
                     @edit="openEditDialog(account)"
-                    @browse="openBrowser(account)"
                   />
                 </div>
               </div>
@@ -269,7 +307,7 @@ useSilentSettingRefresh(() => fetchData(true), {
             :error-description="t('common.troubleshooting')"
           >
             <template #button>
-              <VBtn color="primary" variant="tonal" @click="fetchData(true)">
+              <VBtn color="primary" variant="tonal" @click="fetchData()">
                 {{ t('common.retry') }}
               </VBtn>
             </template>

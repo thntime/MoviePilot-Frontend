@@ -2,7 +2,8 @@
 import type { PropType } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { NetdiskAccount } from '@/api/netdisk'
-import { getNetdiskPlatformName, getNetdiskQuotaPercent, getNetdiskStatusMeta } from '@/utils/netdisk'
+import NetdiskPlatformGroup from '@/components/setting/NetdiskPlatformGroup.vue'
+import { formatNetdiskFreeSpace, getNetdiskPlatformName, getNetdiskQuotaPercent, getNetdiskStatusMeta } from '@/utils/netdisk'
 
 // 国际化
 const { t } = useI18n()
@@ -24,7 +25,8 @@ const props = defineProps({
 // 定义触发的自定义事件
 const emit = defineEmits(['select'])
 
-// 搜索关键字
+// 平台默认全部展开；记录用户主动折叠的平台集合，搜索时临时展开匹配分组。
+const collapsedPlatforms = ref(new Set<string>())
 const search = ref('')
 
 // 账号较多或正在搜索时才显示搜索框
@@ -41,16 +43,23 @@ const filteredGroups = computed<Array<[string, NetdiskAccount[]]>>(() => {
   for (const [platform, list] of props.groupedAccounts) {
     const platformName = getNetdiskPlatformName(t, platform).toLowerCase()
     const matched = list.filter(account => {
-      return (
-        account.nickname.toLowerCase().includes(keyword) ||
-        account.name.toLowerCase().includes(keyword) ||
-        platformName.includes(keyword)
-      )
+      return account.nickname.toLowerCase().includes(keyword) || platformName.includes(keyword)
     })
     if (matched.length > 0) result.push([platform, matched])
   }
   return result
 })
+
+function isExpanded(platform: string): boolean {
+  return search.value.trim() !== '' || !collapsedPlatforms.value.has(platform)
+}
+
+function togglePlatform(platform: string) {
+  const next = new Set(collapsedPlatforms.value)
+  if (next.has(platform)) next.delete(platform)
+  else next.add(platform)
+  collapsedPlatforms.value = next
+}
 
 function selectAccount(account: NetdiskAccount) {
   emit('select', account.id)
@@ -73,12 +82,14 @@ function selectAccount(account: NetdiskAccount) {
     </div>
     <div class="netdisk-console__scroll flex-grow-1" role="listbox" :aria-label="t('netdisk.list.label')">
       <template v-for="[platform, list] in filteredGroups" :key="platform">
-        <div class="netdisk-account-list__group-header">
-          <span class="text-caption font-weight-medium">{{ getNetdiskPlatformName(t, platform) }}</span>
-          <span class="text-caption text-medium-emphasis">{{ t('netdisk.list.count', { count: list.length }) }}</span>
-        </div>
+        <NetdiskPlatformGroup
+          :platform="platform"
+          :accounts="list"
+          :expanded="isExpanded(platform)"
+          @toggle="togglePlatform(platform)"
+        />
         <VListItem
-          v-for="account in list"
+          v-for="account in isExpanded(platform) ? list : []"
           :key="account.id"
           :active="account.id === selectedId"
           class="netdisk-account-list__item"
@@ -94,8 +105,8 @@ function selectAccount(account: NetdiskAccount) {
             <span class="d-sr-only">{{ getNetdiskStatusMeta(t, account.status).text }}</span>
           </template>
           <VListItemTitle class="d-flex align-center gap-1">
-            <span class="text-truncate" :title="account.nickname || account.name">
-              {{ account.nickname || account.name }}
+            <span class="text-truncate" :title="account.nickname || getNetdiskPlatformName(t, account.platform)">
+              {{ account.nickname || getNetdiskPlatformName(t, account.platform) }}
             </span>
             <VIcon
               v-if="account.is_primary"
@@ -115,6 +126,10 @@ function selectAccount(account: NetdiskAccount) {
             />
             <span class="text-caption text-medium-emphasis shrink-0">
               {{ getNetdiskQuotaPercent(account.quota_used, account.quota_total) }}%
+            </span>
+            <!-- 剩余空间：负值按 0 处理，与平台分组的汇总口径一致 -->
+            <span class="text-caption text-medium-emphasis shrink-0">
+              {{ t('netdisk.detail.quotaFree', { free: formatNetdiskFreeSpace(Math.max(account.quota_total - account.quota_used, 0)) }) }}
             </span>
           </VListItemSubtitle>
           <VListItemSubtitle v-else class="mt-1">
@@ -137,18 +152,6 @@ function selectAccount(account: NetdiskAccount) {
   min-block-size: 0;
   block-size: 100%;
   border-inline-end: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
-}
-
-.netdisk-account-list__group-header {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-block: 6px;
-  padding-inline: 16px;
-  background: rgb(var(--v-theme-surface));
 }
 
 .netdisk-account-list__item {

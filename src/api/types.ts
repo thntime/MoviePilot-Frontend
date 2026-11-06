@@ -1190,6 +1190,8 @@ export interface DownloadingInfo {
   netdisk_platform?: string
   // 网盘分享码
   share_code?: string
+  // 网盘分享地址
+  share_url?: string
   // 下载速度
   dlspeed?: string
   // 上传速度

@@ -87,6 +87,7 @@ const DASHBOARD_DESKTOP_DEFAULT_LAYOUT: DashboardGridLayoutConfig = {
   quickActions: { x: 8, y: 22, w: 4, h: 5 },
   systemInfo: { x: 8, y: 27, w: 4, h: 6 },
   mediaRecommend: { x: 0, y: 33, w: 8, h: 17 },
+  netdiskStatus: { x: 8, y: 33, w: 4, h: 9 },
 }
 
 // 单个设备档位的仪表盘配置，将布局与显示项绑定到同一份持久化数据。
@@ -327,6 +328,15 @@ const dashboardConfigs = ref<DashboardItem[]>([
     rows: 6,
     elements: [],
   },
+  {
+    id: 'netdiskStatus',
+    name: t('dashboard.netdiskStatus.title'),
+    key: '',
+    attrs: {},
+    cols: { cols: 12, md: 4 },
+    rows: 9,
+    elements: [],
+  },
 ])
 
 // 插件的仪表板元信息
@@ -562,6 +572,7 @@ function getDefaultDashboardEnableConfig(): DashboardEnableConfig {
     recentImports: true,
     quickActions: true,
     systemInfo: true,
+    netdiskStatus: true,
   }
 }
 
