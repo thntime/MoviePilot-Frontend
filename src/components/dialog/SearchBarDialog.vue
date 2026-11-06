@@ -72,6 +72,8 @@ const chooseSiteDialog = ref(false)
 const selectedSites = ref<number[]>([])
 const allSites = ref<Site[]>([])
 const siteSearchType = ref<'torrent' | 'subtitle' | 'music'>('torrent')
+// 原生页选择站点只更新摘要，确认后由页面的主按钮执行搜索。
+const nativeSiteSelection = ref<NativeResourceType | null>(null)
 
 // 定义事件
 const emit = defineEmits(['close', 'update:modelValue'])
@@ -218,7 +220,7 @@ const mediaSearchActions = computed(() => {
     {
       type: 'media',
       icon: 'mdi-movie-search',
-      title: `${t('recommend.categoryMovie')}、${t('recommend.categoryTV')}`,
+      title: t('dialog.searchBar.filmTV'),
       description: t('resource.title'),
     },
     {
@@ -236,7 +238,7 @@ const mediaSearchActions = computed(() => {
     {
       type: 'person',
       icon: 'mdi-account-search',
-      title: t('browse.actor'),
+      title: t('dialog.searchBar.people'),
       description: t('dialog.searchBar.actorSearch'),
     },
   ] satisfies MediaSearchAction[]
@@ -411,6 +413,7 @@ async function queryMusicSites() {
 
 /** 打开指定资源类型的站点选择对话框。 */
 async function openSiteDialog(type: 'torrent' | 'subtitle' | 'music' = 'torrent') {
+  nativeSiteSelection.value = null
   siteSearchType.value = type
   await loadUserSitePreferences()
   if (type === 'music') {
@@ -423,6 +426,14 @@ async function openSiteDialog(type: 'torrent' | 'subtitle' | 'music' = 'torrent'
 
 /** 按当前搜索类型刷新站点选择列表。 */
 async function reloadSearchSites() {
+  if (nativeSiteSelection.value) {
+    const state = nativeResourceSelections[nativeSiteSelection.value]
+    state.ready = false
+    await loadNativeResourceSites(nativeSiteSelection.value)
+    allSites.value = [...state.sites]
+    selectedSites.value = selectedSites.value.filter(id => state.sites.some(site => site.id === id))
+    return
+  }
   if (siteSearchType.value === 'music') {
     await queryMusicSites()
     return
@@ -442,9 +453,14 @@ const matchedSubscribeItems = computed(() => {
   })
 })
 
-/** 使用选中的站点执行当前资源类型搜索。 */
+/** 原生页仅确认站点选择；原有网页弹窗继续直接搜索。 */
 function searchSites(sites: number[]) {
   chooseSiteDialog.value = false
+  if (nativeSiteSelection.value) {
+    nativeResourceSelections[nativeSiteSelection.value].selected = [...sites]
+    nativeSiteSelection.value = null
+    return
+  }
   selectedSites.value = sites
   if (siteSearchType.value === 'subtitle') {
     searchSubtitle()
@@ -761,7 +777,165 @@ function nativePanel(): NativePanelSource {
   }
 }
 
-defineExpose({ focusSearchInput, nativePanel })
+type NativeResourceType = 'torrent' | 'music' | 'subtitle'
+
+/** 每类资源独立保存站点和选择，切换到音乐时不能沿用普通站点。 */
+interface NativeResourceSelection {
+  sites: Site[]
+  selected: number[]
+  loading: boolean
+  ready: boolean
+  failed: boolean
+}
+const nativeResourceSelections = reactive<Record<NativeResourceType, NativeResourceSelection>>({
+  torrent: { sites: [], selected: [], loading: false, ready: false, failed: false },
+  music: { sites: [], selected: [], loading: false, ready: false, failed: false },
+  subtitle: { sites: [], selected: [], loading: false, ready: false, failed: false },
+})
+
+/** 站点请求按类型隔离；失败保留显式重试，不能把失败当作无站点并搜索全部。 */
+async function loadNativeResourceSites(type: NativeResourceType) {
+  const state = nativeResourceSelections[type]
+  if (state.loading || state.ready) return
+  state.loading = true
+  state.failed = false
+  try {
+    const [sites, preferences] = await Promise.all([
+      api.get<Site[]>(type === 'music' ? 'site/media/music' : 'site/'),
+      api.get<{ value?: number[] }>('system/setting/public/IndexerSites'),
+    ])
+    state.sites = sites.filter(site => site.is_active)
+    const available = new Set(state.sites.map(site => site.id))
+    state.selected = (preferences.value ?? []).filter(id => available.has(id))
+    if (!state.selected.length) state.selected = [...available]
+    state.ready = true
+  } catch (error) {
+    state.failed = true
+    console.error(error)
+  } finally {
+    state.loading = false
+  }
+}
+
+/** 复用站点选择弹窗；各资源类型的临时选择互不覆盖，取消不写回。 */
+function openNativeSiteSelection(type: NativeResourceType) {
+  const state = nativeResourceSelections[type]
+  nativeSiteSelection.value = type
+  siteSearchType.value = type
+  allSites.value = [...state.sites]
+  selectedSites.value = [...state.selected]
+  chooseSiteDialog.value = true
+}
+
+/** 将现有搜索状态投影为独立页面；宿主仅切换展示分组，不维护第二套业务接口。 */
+function nativeSearchPage(): NativePanelSource {
+  const keyword = searchWord.value?.trim() || ''
+  const existing = nativePanel()
+  const media: NativePanelEntry[] = hasDiscoveryPermission.value
+    ? mediaSearchActions.value.map(action => ({
+        id: `media-${action.type}`,
+        title: action.title,
+        icon: action.icon,
+        subtitle: action.description,
+        children: [
+          {
+            id: `run-${action.type}`,
+            title: `${t('common.search')} ${action.title}`,
+            icon: 'search',
+            primary: true,
+            enabled: Boolean(keyword),
+            invoke: () => searchMedia(action.type),
+          },
+          ...mediaSearchSourceOptions.value[action.type].map(source => ({
+            id: `source-${action.type}-${source.value}`,
+            title: source.label,
+            selected: selectedMediaSearchSources[action.type].includes(source.value),
+            keepOpen: true,
+            invoke: () => {
+              const selected = selectedMediaSearchSources[action.type]
+              if (!selected.includes(source.value)) selected.push(source.value)
+              else if (selected.length > 1)
+                selectedMediaSearchSources[action.type] = selected.filter(value => value !== source.value)
+            },
+          })),
+        ],
+      }))
+    : []
+  const resources: NativePanelEntry[] = hasSearchPermission.value
+    ? (
+        [
+          ['torrent', t('dialog.searchBar.relatedResources')],
+          ['music', t('dialog.searchBar.relatedMusicResources')],
+          ['subtitle', t('dialog.searchBar.relatedSubtitles')],
+        ] as const
+      ).map(([type, title]) => {
+        const state = nativeResourceSelections[type]
+        return {
+          id: `resource-${type}`,
+          title,
+          icon: type === 'music' ? 'mdi-music-note-outline' : type === 'subtitle' ? 'mdi-subtitles-outline' : 'search',
+          keepOpen: true,
+          invoke: () => loadNativeResourceSites(type),
+          children: [
+            {
+              id: `run-resource-${type}`,
+              title: `${t('common.search')} ${title}`,
+              icon: 'search',
+              primary: true,
+              enabled: Boolean(keyword) && state.ready && state.selected.length > 0,
+              invoke: () => {
+                selectedSites.value = [...state.selected]
+                if (type === 'music') searchMusicTorrent()
+                else if (type === 'subtitle') searchSubtitle()
+                else searchTorrent()
+              },
+            },
+            ...(state.ready
+              ? [
+                  {
+                    id: `native-sites-select-${type}`,
+                    title:
+                      state.sites
+                        .filter(site => state.selected.includes(site.id))
+                        .map(site => site.name)
+                        .join('、') || t('common.noData'),
+                    keepOpen: true,
+                    invoke: () => openNativeSiteSelection(type),
+                  },
+                ]
+              : []),
+            ...(!state.ready
+              ? [
+                  {
+                    id: `native-sites-load-${type}`,
+                    title: state.loading ? t('common.loading') : t('common.retry'),
+                    subtitle: state.failed ? t('common.retry') : undefined,
+                    enabled: !state.loading,
+                    keepOpen: true,
+                    invoke: () => loadNativeResourceSites(type),
+                  },
+                ]
+              : []),
+          ],
+        }
+      })
+    : []
+  return {
+    ...existing,
+    sections: [
+      { id: 'media', title: t('common.media'), items: media },
+      { id: 'resources', title: t('resource.title'), items: resources },
+      {
+        id: 'local',
+        title: t('dialog.searchBar.functions'),
+        items: existing.sections[0].items.filter(item => ['shares', 'history'].includes(item.id)),
+      },
+      ...existing.sections.slice(1),
+    ],
+  }
+}
+
+defineExpose({ focusSearchInput, nativePanel, nativeSearchPage })
 
 onMounted(() => {
   // 搜索来源默认跟随全局媒体搜索数据源配置，保证基础设置生效
@@ -1166,6 +1340,7 @@ onMounted(() => {
     v-model="chooseSiteDialog"
     :sites="allSites"
     :selected="selectedSites"
+    :selection-only="nativeSiteSelection !== null"
     @search="searchSites"
     @close="chooseSiteDialog = false"
     @reload="reloadSearchSites"
