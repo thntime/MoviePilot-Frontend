@@ -31,6 +31,34 @@ export interface NetdiskShareResult {
   expires_at: string | null
 }
 
+/** 分享内展开出的文件条目；path 为分享内相对路径。 */
+export interface NetdiskSharePreviewFile {
+  file_id: string
+  name: string
+  size: number
+  is_dir: boolean
+  parent_id: string
+  path: string
+}
+
+/** 分享 AI 预选请求；季集支持整数、文本或列表。 */
+export interface NetdiskSharePreviewRequest {
+  url: string
+  password?: string
+  platform?: string
+  account_id?: number
+  season?: number | string | number[]
+  episodes?: number | string | number[]
+  user_intent?: string
+}
+
+/** 分享 AI 预选结果；selected_file_ids 保持模型返回顺序。 */
+export interface NetdiskSharePreviewResult {
+  files: NetdiskSharePreviewFile[]
+  selected_file_ids: string[]
+  suggested_episode_selection: string
+}
+
 interface CapabilitiesPayload {
   capabilities: NetdiskCapabilities
 }
@@ -85,6 +113,20 @@ export async function createNetdiskShare(
     { feedback: 'silent' },
   )
   return payload.share
+}
+
+/** 展开分享文件树并请求 AI 预选目标季集；结果仅作建议，不发起下载。 */
+export async function previewNetdiskShare(payload: NetdiskSharePreviewRequest): Promise<NetdiskSharePreviewResult> {
+  const result = await api.post<NetdiskSharePreviewResult, NetdiskSharePreviewResult>(
+    'netdisk/share/preview',
+    payload,
+    { feedback: 'silent' },
+  )
+  return {
+    files: result?.files ?? [],
+    selected_file_ids: result?.selected_file_ids ?? [],
+    suggested_episode_selection: result?.suggested_episode_selection ?? '',
+  }
 }
 
 /** 批量移动文件到目标目录。 */
