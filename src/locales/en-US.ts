@@ -4518,6 +4518,10 @@ export default {
       episodeSelection: 'Episodes',
       episodeSelectionPlaceholder: 'Empty for all, e.g. 153-162 or 164',
       episodeSelectionHint: 'Netdisk shares only; files without a parseable episode are still downloaded',
+      aiPreview: 'AI Preselect',
+      aiPreviewFilled: 'Suggested episodes filled in. Confirm before downloading',
+      aiPreviewEmpty: 'No episodes could be preselected. Enter them manually',
+      aiPreviewFailed: 'AI preselection failed. Enter episodes manually',
     },
     addSubtitleDownload: {
       confirmDownload: 'Confirm Subtitle Download',

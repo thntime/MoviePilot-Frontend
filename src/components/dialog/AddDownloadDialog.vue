@@ -3,6 +3,7 @@ import { useToast } from 'vue-toastification'
 import api, { isApiBusinessFailure, isApiResponse } from '@/api'
 import { doneNProgress, startNProgress } from '@/api/nprogress'
 import { listDownloadDirectories } from '@/api/storage'
+import { previewNetdiskShare } from '@/api/netdiskFiles'
 import type {
   DownloadDirectory,
   DownloaderConf,
@@ -130,6 +131,7 @@ const showAdvancedOptions = ref(false)
 
 // 网盘分享资源可以指定集数，留空表示下载分享内全部文件。
 const episodeSelection = ref('')
+const aiPreviewLoading = ref(false)
 const isNetdiskTorrent = computed(() => props.torrent?.download_type === 'netdisk')
 
 // 当前数据源：优先使用已随媒体或种子传入的完整身份，可在高级选项手动切换。
@@ -277,6 +279,34 @@ const downloaderOptions = computed(() => {
     value: item.name,
   }))
 })
+
+// 请求 AI 建议集数，只回填输入框，下载仍由用户确认后手动发起。
+async function previewShareEpisodes() {
+  const enclosure = props.torrent?.enclosure?.trim()
+  if (!isNetdiskTorrent.value || !enclosure || aiPreviewLoading.value) return
+
+  aiPreviewLoading.value = true
+  try {
+    const result = await previewNetdiskShare({
+      url: enclosure,
+      password: props.torrent?.share_password || '',
+      platform: props.torrent?.netdisk_platform,
+      season: props.media?.season,
+      episodes: episodeSelection.value.trim() || undefined,
+    })
+    const suggestion = result.suggested_episode_selection.trim()
+    if (suggestion) {
+      episodeSelection.value = suggestion
+      $toast.success(t('dialog.addDownload.aiPreviewFilled'))
+    } else {
+      $toast.warning(t('dialog.addDownload.aiPreviewEmpty'))
+    }
+  } catch {
+    $toast.error(t('dialog.addDownload.aiPreviewFailed'))
+  } finally {
+    aiPreviewLoading.value = false
+  }
+}
 
 // 添加下载
 async function addDownload() {
@@ -455,6 +485,20 @@ onMounted(() => {
               density="comfortable"
               prepend-inner-icon="mdi-numeric"
             />
+            <VBtn
+              data-testid="netdisk-ai-preview"
+              class="mt-1"
+              color="primary"
+              density="compact"
+              prepend-icon="mdi-auto-fix"
+              size="small"
+              variant="text"
+              :loading="aiPreviewLoading"
+              :disabled="!props.torrent?.enclosure"
+              @click="previewShareEpisodes"
+            >
+              {{ t('dialog.addDownload.aiPreview') }}
+            </VBtn>
           </VCol>
         </VRow>
         <VRow class="px-5 mt-2">

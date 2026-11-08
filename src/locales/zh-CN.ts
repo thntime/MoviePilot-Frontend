@@ -4401,6 +4401,10 @@ export default {
       episodeSelection: '指定集数',
       episodeSelectionPlaceholder: '留空下载全部，如 153-162 或 164',
       episodeSelectionHint: '仅网盘分享生效；解析不出集数的文件仍会下载，避免漏集',
+      aiPreview: 'AI 预选',
+      aiPreviewFilled: '已填入建议集数，请确认后下载',
+      aiPreviewEmpty: '未找到可预选的集数，请手动填写',
+      aiPreviewFailed: 'AI 预选失败，请手动填写',
     },
     addSubtitleDownload: {
       confirmDownload: '确认下载字幕',

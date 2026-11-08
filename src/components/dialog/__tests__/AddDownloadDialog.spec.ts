@@ -634,6 +634,51 @@ describe('AddDownloadDialog submissions', () => {
     expect(screen.getByRole('button', { name: '开始下载' })).not.toBeDisabled()
   })
 
+  it('preselects netdisk episodes without submitting a download and keeps the suggestion editable', async () => {
+    const previewRequest = vi.fn()
+    server.use(
+      http.post(new URL('netdisk/share/preview', API_BASE_URL).href, async ({ request }) => {
+        previewRequest(await request.json())
+        return apiJson({
+          files: [],
+          selected_file_ids: ['episode-1', 'episode-2', 'episode-3'],
+          suggested_episode_selection: '1-3',
+        })
+      }),
+    )
+    const user = userEvent.setup()
+    const { events } = await renderDialog({
+      media: createMedia({ season: 1 }),
+      torrent: createTorrent({
+        download_type: 'netdisk',
+        enclosure: 'https://pan.example/share/example',
+        netdisk_platform: 'quark',
+        share_password: '1234',
+      }),
+    })
+    const episodeInput = screen.getByLabelText('指定集数')
+
+    await user.type(episodeInput, '1')
+    await user.click(screen.getByTestId('netdisk-ai-preview'))
+
+    await waitFor(() => expect(episodeInput).toHaveValue('1-3'))
+    expect(previewRequest).toHaveBeenCalledWith({
+      url: 'https://pan.example/share/example',
+      password: '1234',
+      platform: 'quark',
+      season: 1,
+      episodes: '1',
+    })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('已填入建议集数，请确认后下载')
+    expect(events.done).not.toHaveBeenCalled()
+    expect(events.error).not.toHaveBeenCalled()
+    expect(mocks.doneNProgress).not.toHaveBeenCalled()
+
+    await user.clear(episodeInput)
+    await user.type(episodeInput, '2')
+    expect(episodeInput).toHaveValue('2')
+  })
+
   it('clears loading and progress after an HTTP failure without emitting done', async () => {
     server.use(downloadHandler('download/add', { message: '服务异常', success: false }, 500))
     const user = userEvent.setup()
