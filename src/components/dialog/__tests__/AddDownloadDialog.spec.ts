@@ -216,6 +216,7 @@ async function renderDialog({
   downloaders = [],
   media,
   musicType,
+  aiAgentEnabled = false,
   recognizeSource = 'themoviedb',
   torrent = createTorrent(),
 }: {
@@ -223,6 +224,7 @@ async function renderDialog({
   downloaders?: Array<{ name: string; type: string }>
   media?: MediaInfo
   musicType?: 'album' | 'recording'
+  aiAgentEnabled?: boolean
   recognizeSource?: string
   torrent?: TorrentInfo
 } = {}) {
@@ -249,6 +251,7 @@ async function renderDialog({
     initialState: {
       globalSettings: {
         data: {
+          AI_AGENT_ENABLE: aiAgentEnabled,
           RECOGNIZE_SOURCE: recognizeSource,
         },
       },
@@ -648,6 +651,7 @@ describe('AddDownloadDialog submissions', () => {
     )
     const user = userEvent.setup()
     const { events } = await renderDialog({
+      aiAgentEnabled: true,
       media: createMedia({ season: 1 }),
       torrent: createTorrent({
         download_type: 'netdisk',
@@ -677,6 +681,23 @@ describe('AddDownloadDialog submissions', () => {
     await user.clear(episodeInput)
     await user.type(episodeInput, '2')
     expect(episodeInput).toHaveValue('2')
+  })
+
+  it('hides AI preselection when the agent is disabled but keeps manual episode entry', async () => {
+    const user = userEvent.setup()
+    await renderDialog({
+      aiAgentEnabled: false,
+      torrent: createTorrent({
+        download_type: 'netdisk',
+        enclosure: 'https://pan.example/share/example',
+        netdisk_platform: 'quark',
+      }),
+    })
+    const episodeInput = screen.getByLabelText('指定集数')
+
+    expect(screen.queryByTestId('netdisk-ai-preview')).not.toBeInTheDocument()
+    await user.type(episodeInput, '1-3')
+    expect(episodeInput).toHaveValue('1-3')
   })
 
   it('clears loading and progress after an HTTP failure without emitting done', async () => {

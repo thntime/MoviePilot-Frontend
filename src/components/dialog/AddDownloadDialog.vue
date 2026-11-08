@@ -132,6 +132,7 @@ const showAdvancedOptions = ref(false)
 // 网盘分享资源可以指定集数，留空表示下载分享内全部文件。
 const episodeSelection = ref('')
 const aiPreviewLoading = ref(false)
+const aiAgentEnabled = computed(() => Boolean(globalSettings.AI_AGENT_ENABLE))
 const isNetdiskTorrent = computed(() => props.torrent?.download_type === 'netdisk')
 
 // 当前数据源：优先使用已随媒体或种子传入的完整身份，可在高级选项手动切换。
@@ -283,7 +284,7 @@ const downloaderOptions = computed(() => {
 // 请求 AI 建议集数，只回填输入框，下载仍由用户确认后手动发起。
 async function previewShareEpisodes() {
   const enclosure = props.torrent?.enclosure?.trim()
-  if (!isNetdiskTorrent.value || !enclosure || aiPreviewLoading.value) return
+  if (!aiAgentEnabled.value || !isNetdiskTorrent.value || !enclosure || aiPreviewLoading.value) return
 
   aiPreviewLoading.value = true
   try {
@@ -486,6 +487,7 @@ onMounted(() => {
               prepend-inner-icon="mdi-numeric"
             />
             <VBtn
+              v-if="aiAgentEnabled"
               data-testid="netdisk-ai-preview"
               class="mt-1"
               color="primary"
