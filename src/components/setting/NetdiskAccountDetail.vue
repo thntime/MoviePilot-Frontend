@@ -3,12 +3,15 @@ import type { PropType } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 import {
+  clearNetdiskRecycleBin,
   fetchNetdiskAccount,
   type NetdiskAccount,
   type NetdiskAccountDetail,
   type NetdiskPlatformInfo,
 } from '@/api/netdisk'
+import { getApiBusinessErrorMessage } from '@/api/client'
 import NetdiskAccountFiles from '@/components/setting/NetdiskAccountFiles.vue'
+import { useConfirm } from '@/composables/useConfirm'
 import { useNetdiskAccountActions } from '@/composables/useNetdiskAccountActions'
 import { formatFileSize } from '@/@core/utils/formatters'
 import {
@@ -35,12 +38,15 @@ const props = defineProps({
 
 const emit = defineEmits(['update', 'edit'])
 
+const createConfirm = useConfirm()
+
 const accountRef = toRef(props, 'account')
 const { probing, refreshing, settingPrimary, probeAccount, refreshAccount, setPrimary, deleteAccount } =
   useNetdiskAccountActions(accountRef, () => emit('update'))
 
 const accountDetail = ref<NetdiskAccountDetail | null>(null)
 const credentialLoading = ref(false)
+const clearingRecycleBin = ref(false)
 
 /** 选中账号变化时读取明文凭据，列表中的脱敏值不用于详情展示。 */
 async function loadAccountDetail() {
@@ -80,6 +86,33 @@ async function copyCredential() {
     $toast.error(t('netdisk.detail.copyFailed'))
   }
 }
+
+/** 清空回收站（不可恢复）；success 为真时仍需检查 cleared 才能确认已清空。 */
+async function clearRecycleBin() {
+  if (clearingRecycleBin.value) return
+
+  const isConfirmed = await createConfirm({
+    type: 'warn',
+    title: t('netdisk.actions.clearRecycleBin'),
+    content: t('netdisk.clearRecycleBinConfirm'),
+    confirmText: t('netdisk.actions.clearRecycleBin'),
+  })
+  if (!isConfirmed) return
+
+  clearingRecycleBin.value = true
+  try {
+    const result = await clearNetdiskRecycleBin(props.account.id)
+    if (result?.data?.cleared) {
+      $toast.success(t('netdisk.clearRecycleBinSuccess'))
+    } else {
+      $toast.error(t('netdisk.clearRecycleBinIncomplete'))
+    }
+  } catch (error) {
+    $toast.error(getApiBusinessErrorMessage(error) ?? t('netdisk.clearRecycleBinFailed'))
+  } finally {
+    clearingRecycleBin.value = false
+  }
+}
 </script>
 
 <template>
@@ -99,6 +132,17 @@ async function copyCredential() {
       <div class="d-flex flex-wrap align-center gap-2">
         <VBtn variant="tonal" size="small" prepend-icon="mdi-wifi-check" :loading="probing" @click="probeAccount">
           {{ t('netdisk.actions.probe') }}
+        </VBtn>
+        <VBtn
+          v-if="platformInfo?.recycle_bin"
+          color="error"
+          variant="tonal"
+          size="small"
+          prepend-icon="mdi-delete-sweep-outline"
+          :loading="clearingRecycleBin"
+          @click="clearRecycleBin"
+        >
+          {{ t('netdisk.actions.clearRecycleBin') }}
         </VBtn>
         <VBtn
           v-if="platformInfo?.supports_refresh"
