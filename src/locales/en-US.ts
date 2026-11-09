@@ -2109,6 +2109,7 @@ export default {
       quark: 'Quark',
       uc: 'UC',
       pan139: 'China Mobile',
+      tianyi: 'Tianyi Cloud',
       pan123: '123pan',
       pan115: '115',
       guangya: 'Guangya',

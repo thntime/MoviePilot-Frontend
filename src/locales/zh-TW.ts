@@ -2066,6 +2066,7 @@ export default {
       quark: '誇克',
       uc: 'UC',
       pan139: '移動雲盤',
+      tianyi: '天翼雲盤',
       pan123: '123雲盤',
       pan115: '115',
       guangya: '光鴨',

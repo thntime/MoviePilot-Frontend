@@ -407,6 +407,11 @@ watch(
   color: white;
 }
 
+.chip-netdisk-tianyi {
+  background-color: #ad1457;
+  color: white;
+}
+
 .chip-netdisk-pan123 {
   background-color: #43a047;
   color: white;

@@ -5,8 +5,8 @@ import type { ComposerTranslation } from 'vue-i18n'
  * 避免后端渠道名标签变化时平台信息丢失。
  */
 
-// 已知网盘平台标识，顺序与徽标配色保持一致。
-export const NETDISK_PLATFORMS = ['quark', 'uc', 'pan139', 'pan123', 'pan115', 'guangya', 'baidu', 'xunlei'] as const
+// 已知网盘平台标识，前八项与徽标配色顺序一致；天翼云盘暂不支持取链，仅用于搜索结果显示。
+export const NETDISK_PLATFORMS = ['quark', 'uc', 'pan139', 'pan123', 'pan115', 'guangya', 'baidu', 'xunlei', 'tianyi'] as const
 
 // 历史后端使用 c139 标识中国移动云盘，展示时与 pan139 合并为同一平台。
 const netdiskPlatformAliases: Record<string, string> = {
@@ -29,9 +29,10 @@ const netdiskPlatformStyles: Record<string, string> = {
   guangya: 'chip-netdisk-guangya',
   baidu: 'chip-netdisk-baidu',
   xunlei: 'chip-netdisk-xunlei',
+  tianyi: 'chip-netdisk-tianyi',
 }
 
-// 平台图标集中维护，保证八个平台在控制台中具有稳定且不同的视觉标识。
+// 平台图标集中维护，保证九个平台在控制台中具有稳定且不同的视觉标识。
 const netdiskPlatformIcons: Record<string, string> = {
   quark: 'mdi-cloud-outline',
   uc: 'mdi-cloud-circle-outline',
@@ -41,6 +42,7 @@ const netdiskPlatformIcons: Record<string, string> = {
   guangya: 'mdi-weather-sunny',
   baidu: 'mdi-paw',
   xunlei: 'mdi-lightning-bolt-outline',
+  tianyi: 'mdi-cloud-download-outline',
 }
 
 /** 返回平台图标，未知平台使用通用云盘图标。 */

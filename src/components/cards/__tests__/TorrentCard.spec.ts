@@ -416,4 +416,15 @@ describe('TorrentCard netdisk platform badge', () => {
     expect(badge).toHaveClass('chip-netdisk-pan139')
     expect(badge).toHaveTextContent('移动云盘')
   })
+
+  it('renders the Tianyi Cloud badge with its own style', async () => {
+    const { container } = await renderCard(
+      createContext({ torrent: { download_type: 'netdisk', netdisk_platform: 'tianyi' } }),
+    )
+
+    const badge = container.querySelector<HTMLElement>('[class*="chip-netdisk"]')
+    expect(badge).toHaveClass('chip-netdisk-tianyi')
+    expect(badge).toHaveTextContent('天翼云盘')
+    expect(badge).not.toHaveTextContent('移动云盘')
+  })
 })

@@ -2076,6 +2076,7 @@ export default {
       quark: '夸克',
       uc: 'UC',
       pan139: '移动云盘',
+      tianyi: '天翼云盘',
       pan123: '123云盘',
       pan115: '115',
       guangya: '光鸭',
