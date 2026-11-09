@@ -87,11 +87,7 @@ async function copyCredential() {
   }
 }
 
-// 后端在回收站本就为空时返回 success=true、cleared=false，并固定使用该提示文案。
-// 文案属于后端响应协议，只有精确匹配到它才降级为 info，避免把限流等其他未清空情况误判为成功。
-const RECYCLE_BIN_EMPTY_MESSAGE = '回收站已为空'
-
-/** 清空回收站（不可恢复）；success 为真时仍需检查 cleared 才能确认已清空。 */
+/** 清空回收站（不可恢复）；data 客户端已剥掉 envelope，按 cleared/empty 判定结果。 */
 async function clearRecycleBin() {
   if (clearingRecycleBin.value) return
 
@@ -106,9 +102,9 @@ async function clearRecycleBin() {
   clearingRecycleBin.value = true
   try {
     const result = await clearNetdiskRecycleBin(props.account.id)
-    if (result?.data?.cleared) {
+    if (result?.cleared === true) {
       $toast.success(t('netdisk.clearRecycleBinSuccess'))
-    } else if (result?.success && String(result.message || '').trim() === RECYCLE_BIN_EMPTY_MESSAGE) {
+    } else if (result?.empty === true) {
       $toast.info(t('netdisk.clearRecycleBinEmpty'))
     } else {
       $toast.error(t('netdisk.clearRecycleBinIncomplete'))

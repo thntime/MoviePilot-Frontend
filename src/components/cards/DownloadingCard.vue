@@ -51,7 +51,9 @@ const hasPosterImage = computed(() => Boolean(posterUrl.value && !imageLoadError
 const mediaTitle = computed(() => media.value.title || props.info?.name || props.info?.title || t('common.unknown'))
 // 网盘任务优先展示「平台：分享码」，比分享标题更稳定，也便于用户定位来源。
 const netdiskPlatform = computed(() => String(props.info?.netdisk_platform || '').trim())
+// 展示文案可回退到 name，但链接只允许使用真实分享码，避免把文件名拼成无效分享地址。
 const netdiskShareCode = computed(() => String(props.info?.share_code || props.info?.name || '').trim())
+const netdiskRealShareCode = computed(() => String(props.info?.share_code || '').trim())
 const netdiskPlatformLabel = computed(() =>
   netdiskPlatform.value ? getNetdiskPlatformName(t, netdiskPlatform.value) : '',
 )
@@ -62,12 +64,11 @@ const netdiskPlatformText = computed(() => {
 const netdiskSourceText = computed(() =>
   netdiskPlatformText.value ? `${netdiskPlatformText.value}${netdiskShareCode.value}` : '',
 )
-// 后端已给出分享地址时直接使用，否则按平台前缀由分享码拼接；拼不出地址时退化为纯文本。
-// 链接与展示共用 netdiskShareCode，历史任务把分享码放在 name 时也保持可点击。
+// 后端已给出分享地址时直接使用，否则按平台前缀由真实分享码拼接；拼不出地址时退化为纯文本。
 const shareHref = computed(() => {
   const explicitUrl = String(props.info?.share_url || '').trim()
   if (explicitUrl) return explicitUrl
-  return buildNetdiskShareUrl(netdiskPlatform.value, netdiskShareCode.value)
+  return buildNetdiskShareUrl(netdiskPlatform.value, netdiskRealShareCode.value)
 })
 const secondaryTitleText = computed(() => netdiskSourceText.value || String(props.info?.title || '').trim())
 // 未识别任务的主标题会回退到种子名/分享码，此时不再重复展示同一行。

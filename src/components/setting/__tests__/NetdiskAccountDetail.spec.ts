@@ -112,8 +112,8 @@ describe('NetdiskAccountDetail 清理回收站', () => {
     expect(mocks.error).not.toHaveBeenCalled()
   })
 
-  it('确认后按 data.cleared 展示成功提示', async () => {
-    mocks.clear.mockResolvedValue({ success: true, message: 'ok', data: { cleared: true } })
+  it('确认后按 cleared 展示成功提示', async () => {
+    mocks.clear.mockResolvedValue({ cleared: true })
     await renderDetail()
 
     await fireEvent.click(screen.getByText('清理回收站'))
@@ -123,8 +123,8 @@ describe('NetdiskAccountDetail 清理回收站', () => {
     expect(mocks.error).not.toHaveBeenCalled()
   })
 
-  it('success 为真但未清空时展示失败提示', async () => {
-    mocks.clear.mockResolvedValue({ success: true, message: 'limited', data: { cleared: false } })
+  it('cleared 为假时展示失败提示', async () => {
+    mocks.clear.mockResolvedValue({ cleared: false, empty: false })
     await renderDetail()
 
     await fireEvent.click(screen.getByText('清理回收站'))
@@ -136,7 +136,7 @@ describe('NetdiskAccountDetail 清理回收站', () => {
   })
 
   it('回收站本已为空时展示信息提示而不是失败提示', async () => {
-    mocks.clear.mockResolvedValue({ success: true, message: '回收站已为空', data: { cleared: false } })
+    mocks.clear.mockResolvedValue({ cleared: false, empty: true })
     await renderDetail()
 
     await fireEvent.click(screen.getByText('清理回收站'))

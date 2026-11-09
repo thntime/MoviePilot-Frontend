@@ -555,19 +555,34 @@ describe('DownloadingCard netdisk share link', () => {
     expect(link).toHaveAttribute('href', 'https://pan.quark.cn/s/abc123')
   })
 
-  it('test_share_code_falls_back_to_name_for_the_link', async () => {
+  it('test_name_as_filename_does_not_render_a_link', async () => {
     await renderCard(
       downloading({
         netdisk_platform: 'quark',
         share_code: undefined,
         share_url: undefined,
-        name: 'abc123',
-        title: 'quark:abc123',
+        name: 'Show.S01E01.mkv',
+        title: 'Show.S01E01.mkv',
       }),
     )
 
-    const link = screen.getByRole('link', { name: 'abc123' })
-    expect(link).toHaveAttribute('href', 'https://pan.quark.cn/s/abc123')
+    expect(screen.getByText('Show.S01E01.mkv')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('test_share_url_renders_link_without_share_code', async () => {
+    await renderCard(
+      downloading({
+        netdisk_platform: 'uc',
+        share_code: undefined,
+        share_url: 'https://drive.uc.cn/s/5bef20233b194',
+        name: '5bef20233b194',
+        title: 'uc:5bef20233b194',
+      }),
+    )
+
+    const link = screen.getByRole('link', { name: '5bef20233b194' })
+    expect(link).toHaveAttribute('href', 'https://drive.uc.cn/s/5bef20233b194')
   })
 
   it('test_share_code_plain_text_without_code', async () => {

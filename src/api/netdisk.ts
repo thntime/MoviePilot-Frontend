@@ -317,11 +317,11 @@ export function refreshNetdiskAccount(accountId: number): Promise<unknown> {
   return api.post(`netdisk/accounts/${accountId}/refresh`, undefined, { feedback: 'silent' })
 }
 
-/** 回收站清理结果；success 为 true 不代表已清空，需检查 data.cleared。 */
+/** 回收站清理结果；data 客户端已剥掉 envelope，直接返回业务 data。 */
 export interface NetdiskRecycleBinClearResult {
-  success: boolean
-  message?: string
-  data?: { cleared?: boolean }
+  cleared?: boolean
+  cleared_at?: string
+  empty?: boolean
 }
 
 /** 清空账号回收站，删除后不可恢复。 */
