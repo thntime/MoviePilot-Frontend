@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildNetdiskShareUrl,
   getNetdiskQuotaPercent,
   resolveFallbackNetdiskAccountId,
   resolveInitialNetdiskAccountId,
@@ -74,5 +75,33 @@ describe('netdisk account selection', () => {
       expect(getNetdiskQuotaPercent(1, 3)).toBe(33)
       expect(getNetdiskQuotaPercent(200, 100)).toBe(100)
     })
+  })
+})
+
+describe('buildNetdiskShareUrl', () => {
+  it.each([
+    ['xunlei', 'https://pan.xunlei.com/s/'],
+    ['uc', 'https://drive.uc.cn/s/'],
+    ['quark', 'https://pan.quark.cn/s/'],
+    ['pan115', 'https://115cdn.com/s/'],
+    ['baidu', 'https://pan.baidu.com/s/'],
+    ['guangya', 'https://www.guangyapan.com/s/'],
+  ])('builds the %s share url from the platform prefix', (platform, prefix) => {
+    expect(buildNetdiskShareUrl(platform, 'abc123')).toBe(`${prefix}abc123`)
+  })
+
+  it('returns an empty string for platforms without a share url prefix', () => {
+    expect(buildNetdiskShareUrl('tianyi', 'abc123')).toBe('')
+    expect(buildNetdiskShareUrl('unknown', 'abc123')).toBe('')
+    expect(buildNetdiskShareUrl('', 'abc123')).toBe('')
+  })
+
+  it('returns an empty string for a missing or blank share code', () => {
+    expect(buildNetdiskShareUrl('quark', '')).toBe('')
+    expect(buildNetdiskShareUrl('quark', '   ')).toBe('')
+  })
+
+  it('trims and url-encodes the share code', () => {
+    expect(buildNetdiskShareUrl('quark', ' a b/1 ')).toBe('https://pan.quark.cn/s/a%20b%2F1')
   })
 })

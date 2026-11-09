@@ -78,6 +78,25 @@ export function getNetdiskChipClass(platform: string | undefined): string {
   return (canonical && netdiskPlatformStyles[canonical]) || 'chip-netdisk-unknown'
 }
 
+// 分享链接前缀；未列出的平台（含天翼云盘）暂不支持由分享码拼接分享地址。
+const netdiskShareUrlPrefixes: Record<string, string> = {
+  xunlei: 'https://pan.xunlei.com/s/',
+  uc: 'https://drive.uc.cn/s/',
+  quark: 'https://pan.quark.cn/s/',
+  pan115: 'https://115cdn.com/s/',
+  baidu: 'https://pan.baidu.com/s/',
+  guangya: 'https://www.guangyapan.com/s/',
+}
+
+/** 按平台前缀拼接分享地址；未知平台或空分享码返回空串。 */
+export function buildNetdiskShareUrl(platform: string | undefined, shareCode: string | undefined): string {
+  const canonical = canonicalNetdiskPlatform(platform)
+  const prefix = canonical && netdiskShareUrlPrefixes[canonical]
+  const code = String(shareCode || '').trim()
+  if (!prefix || !code) return ''
+  return `${prefix}${encodeURIComponent(code)}`
+}
+
 /** 网盘账号状态展示元信息：active 有效，expired 已过期，其余视为未验证。 */
 export interface NetdiskStatusMeta {
   text: string
