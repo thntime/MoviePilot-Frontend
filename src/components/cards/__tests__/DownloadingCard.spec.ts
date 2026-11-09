@@ -523,3 +523,67 @@ describe('DownloadingCard netdisk source and failure state', () => {
     expect(link).toHaveClass('downloading-card__share-link')
   })
 })
+
+describe('DownloadingCard netdisk share link', () => {
+  it('test_share_code_renders_link_with_share_url', async () => {
+    await renderCard(
+      downloading({
+        netdisk_platform: 'uc',
+        share_code: '5bef20233b194',
+        share_url: 'https://drive.uc.cn/s/5bef20233b194',
+        title: 'uc:5bef20233b194',
+      }),
+    )
+
+    const link = screen.getByRole('link', { name: '5bef20233b194' })
+    expect(link).toHaveAttribute('href', 'https://drive.uc.cn/s/5bef20233b194')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('test_share_code_builds_url_when_missing', async () => {
+    await renderCard(
+      downloading({
+        netdisk_platform: 'quark',
+        share_code: 'abc123',
+        share_url: undefined,
+        title: 'quark:abc123',
+      }),
+    )
+
+    const link = screen.getByRole('link', { name: 'abc123' })
+    expect(link).toHaveAttribute('href', 'https://pan.quark.cn/s/abc123')
+  })
+
+  it('test_share_code_plain_text_without_code', async () => {
+    await renderCard(
+      downloading({
+        name: '',
+        netdisk_platform: 'quark',
+        share_code: '',
+        share_url: 'https://pan.quark.cn/s/should-not-render',
+        title: 'quark 分享',
+      }),
+    )
+
+    expect(screen.getByText('夸克')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('test_share_link_click_stops_propagation', async () => {
+    const { container } = await renderCard(
+      downloading({
+        netdisk_platform: 'baidu',
+        share_code: 'abcd',
+        share_url: 'https://pan.baidu.com/s/abcd',
+        title: 'baidu:abcd',
+      }),
+    )
+    const cardClick = vi.fn()
+    container.querySelector('.downloading-card')!.addEventListener('click', cardClick)
+
+    await fireEvent.click(screen.getByRole('link', { name: 'abcd' }))
+
+    expect(cardClick).not.toHaveBeenCalled()
+  })
+})

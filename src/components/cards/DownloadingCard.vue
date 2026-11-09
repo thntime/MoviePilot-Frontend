@@ -6,7 +6,7 @@ import { formatFileSize } from '@/@core/utils/formatters'
 import { useConfirm } from '@/composables/useConfirm'
 import { useGlobalSettingsStore } from '@/stores'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
-import { getNetdiskPlatformName } from '@/utils/netdisk'
+import { buildNetdiskShareUrl, getNetdiskPlatformName } from '@/utils/netdisk'
 import { useI18n } from 'vue-i18n'
 
 const DownloadTaskSettingsDialog = defineAsyncComponent(
@@ -50,12 +50,23 @@ const hasPosterImage = computed(() => Boolean(posterUrl.value && !imageLoadError
 
 const mediaTitle = computed(() => media.value.title || props.info?.name || props.info?.title || t('common.unknown'))
 // 网盘任务优先展示「平台：分享码」，比分享标题更稳定，也便于用户定位来源。
-const netdiskSourceText = computed(() => {
-  const platform = String(props.info?.netdisk_platform || '').trim()
-  if (!platform) return ''
-  const platformName = getNetdiskPlatformName(t, platform)
-  const shareCode = String(props.info?.share_code || props.info?.name || '').trim()
-  return shareCode ? `${platformName}：${shareCode}` : platformName
+const netdiskPlatform = computed(() => String(props.info?.netdisk_platform || '').trim())
+const netdiskShareCode = computed(() => String(props.info?.share_code || props.info?.name || '').trim())
+const netdiskPlatformLabel = computed(() =>
+  netdiskPlatform.value ? getNetdiskPlatformName(t, netdiskPlatform.value) : '',
+)
+const netdiskPlatformText = computed(() => {
+  if (!netdiskPlatform.value) return ''
+  return netdiskShareCode.value ? `${netdiskPlatformLabel.value}：` : netdiskPlatformLabel.value
+})
+const netdiskSourceText = computed(() =>
+  netdiskPlatformText.value ? `${netdiskPlatformText.value}${netdiskShareCode.value}` : '',
+)
+// 后端已给出分享地址时直接使用，否则按平台前缀由分享码拼接；拼不出地址时退化为纯文本。
+const shareHref = computed(() => {
+  const explicitUrl = String(props.info?.share_url || '').trim()
+  if (explicitUrl) return explicitUrl
+  return buildNetdiskShareUrl(netdiskPlatform.value, String(props.info?.share_code || ''))
 })
 const secondaryTitleText = computed(() => netdiskSourceText.value || String(props.info?.title || '').trim())
 // 未识别任务的主标题会回退到种子名/分享码，此时不再重复展示同一行。
@@ -293,7 +304,22 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                   <span v-if="titleMetaText" class="downloading-card__title-meta">{{ titleMetaText }}</span>
                 </div>
                 <div v-if="showSecondaryTitle" class="downloading-card__torrent-title" :title="secondaryTitleText">
-                  {{ secondaryTitleText }}
+                  <template v-if="netdiskSourceText">
+                    <span class="downloading-card__share-platform">{{ netdiskPlatformText }}</span>
+                    <template v-if="netdiskShareCode">
+                      <a
+                        v-if="shareHref"
+                        class="downloading-card__share-link"
+                        :href="shareHref"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        @click.stop
+                        >{{ netdiskShareCode }}</a
+                      >
+                      <template v-else>{{ netdiskShareCode }}</template>
+                    </template>
+                  </template>
+                  <template v-else>{{ secondaryTitleText }}</template>
                 </div>
               </div>
 
@@ -533,6 +559,17 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.downloading-card__share-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.downloading-card__share-link:hover,
+.downloading-card__share-link:focus-visible {
+  color: rgb(var(--v-theme-primary));
 }
 
 .downloading-card__error {
