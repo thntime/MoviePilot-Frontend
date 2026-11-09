@@ -3,6 +3,7 @@ import { useToast } from 'vue-toastification'
 import { useI18n } from 'vue-i18n'
 import { checkAllNetdiskAccounts, fetchNetdiskAccounts } from '@/api/netdisk'
 import type { NetdiskAccount } from '@/api/netdisk'
+import { useBackground } from '@/composables/useBackground'
 import {
   formatNetdiskFreeSpace,
   formatNetdiskSpeed,
@@ -17,6 +18,7 @@ const props = withDefaults(defineProps<{ allowRefresh?: boolean }>(), {
 
 const { t } = useI18n()
 const $toast = useToast()
+const { useDataRefresh } = useBackground()
 
 const accounts = ref<NetdiskAccount[]>([])
 const loading = ref(false)
@@ -60,7 +62,8 @@ async function refresh() {
   }
 }
 
-onMounted(loadAccounts)
+// 挂载时立即加载，之后每 30 分钟静默刷新账号列表
+useDataRefresh('dashboard-netdisk-status', loadAccounts, 30 * 60 * 1000, true)
 </script>
 
 <template>
