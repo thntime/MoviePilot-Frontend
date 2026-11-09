@@ -154,7 +154,7 @@ onMounted(loadAccounts)
 .dashboard-netdisk-grid {
   display: grid;
   flex: 1 1 auto;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.35rem 0.5rem;
   align-content: center;
 }
