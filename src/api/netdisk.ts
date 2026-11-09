@@ -10,6 +10,8 @@ export interface NetdiskPlatformInfo {
   cookie_required_keys: string[]
   supports_password_login: boolean
   supports_refresh: boolean
+  /** 是否支持读取与清空回收站。 */
+  recycle_bin: boolean
   login_url: string
 }
 
@@ -313,4 +315,20 @@ export async function checkAllNetdiskAccounts(): Promise<NetdiskAccountsCheckPay
 /** 刷新账号令牌。 */
 export function refreshNetdiskAccount(accountId: number): Promise<unknown> {
   return api.post(`netdisk/accounts/${accountId}/refresh`, undefined, { feedback: 'silent' })
+}
+
+/** 回收站清理结果；success 为 true 不代表已清空，需检查 data.cleared。 */
+export interface NetdiskRecycleBinClearResult {
+  success: boolean
+  message?: string
+  data?: { cleared?: boolean }
+}
+
+/** 清空账号回收站，删除后不可恢复。 */
+export function clearNetdiskRecycleBin(accountId: number): Promise<NetdiskRecycleBinClearResult> {
+  return api.post<NetdiskRecycleBinClearResult, NetdiskRecycleBinClearResult>(
+    `netdisk/accounts/${accountId}/recycle-bin/clear`,
+    undefined,
+    { feedback: 'silent' },
+  )
 }
