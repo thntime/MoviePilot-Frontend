@@ -149,6 +149,7 @@ function selectAccount(account: NetdiskAccount) {
 
 <style lang="scss" scoped>
 .netdisk-account-list {
+  overflow: hidden;
   min-block-size: 0;
   block-size: 100%;
   border-inline-end: thin solid rgba(var(--v-border-color), var(--v-border-opacity));

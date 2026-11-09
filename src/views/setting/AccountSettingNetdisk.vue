@@ -334,6 +334,7 @@ useSilentSettingRefresh(() => fetchData(), {
 .netdisk-console {
   display: grid;
   grid-template-columns: 18rem 1fr;
+  grid-template-rows: minmax(0, 1fr);
   gap: 1rem;
   overflow: hidden;
 
@@ -343,7 +344,7 @@ useSilentSettingRefresh(() => fetchData(), {
   }
 }
 
-.netdisk-console__scroll {
+:deep(.netdisk-console__scroll) {
   overflow-y: auto;
   min-block-size: 0;
   overscroll-behavior: contain;
