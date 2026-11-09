@@ -5985,6 +5985,7 @@ export default {
     clearRecycleBinSuccess: '回收站已清理',
     clearRecycleBinFailed: '回收站清理失败，请稍后重试',
     clearRecycleBinIncomplete: '回收站未能完全清理，请稍后重试',
+    clearRecycleBinEmpty: '回收站已为空',
     refreshSuccess: '账号 {name} 令牌已刷新',
     refreshFailed: '账号 {name} 令牌刷新失败',
     setPrimarySuccess: '已将 {name} 设为主账号',

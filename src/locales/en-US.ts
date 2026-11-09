@@ -6153,6 +6153,7 @@ export default {
     clearRecycleBinSuccess: 'Recycle bin cleared',
     clearRecycleBinFailed: 'Failed to clear the recycle bin, please try again later',
     clearRecycleBinIncomplete: 'The recycle bin was not fully cleared, please try again later',
+    clearRecycleBinEmpty: 'The recycle bin is already empty',
     refreshSuccess: 'Token for account {name} refreshed',
     refreshFailed: 'Failed to refresh token for account {name}',
     setPrimarySuccess: '{name} is now the primary account',

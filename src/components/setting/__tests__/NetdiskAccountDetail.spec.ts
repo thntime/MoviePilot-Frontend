@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   fetchAccount: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
+  info: vi.fn(),
 }))
 
 vi.mock('@/api/netdisk', () => ({
@@ -22,7 +23,7 @@ vi.mock('@/api/netdisk', () => ({
 }))
 
 vi.mock('vue-toastification', () => ({
-  useToast: () => ({ success: mocks.success, error: mocks.error }),
+  useToast: () => ({ success: mocks.success, error: mocks.error, info: mocks.info }),
 }))
 
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => mocks.confirm }))
@@ -130,7 +131,20 @@ describe('NetdiskAccountDetail 清理回收站', () => {
 
     await waitFor(() => expect(mocks.clear).toHaveBeenCalledWith(7))
     expect(mocks.success).not.toHaveBeenCalled()
+    expect(mocks.info).not.toHaveBeenCalled()
     expect(mocks.error).toHaveBeenCalledWith('回收站未能完全清理，请稍后重试')
+  })
+
+  it('回收站本已为空时展示信息提示而不是失败提示', async () => {
+    mocks.clear.mockResolvedValue({ success: true, message: '回收站已为空', data: { cleared: false } })
+    await renderDetail()
+
+    await fireEvent.click(screen.getByText('清理回收站'))
+
+    await waitFor(() => expect(mocks.clear).toHaveBeenCalledWith(7))
+    expect(mocks.info).toHaveBeenCalledWith('回收站已为空')
+    expect(mocks.success).not.toHaveBeenCalled()
+    expect(mocks.error).not.toHaveBeenCalled()
   })
 
   it('请求失败时展示失败提示', async () => {

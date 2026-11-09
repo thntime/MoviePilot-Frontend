@@ -5972,6 +5972,7 @@ export default {
     clearRecycleBinSuccess: '回收站已清理',
     clearRecycleBinFailed: '回收站清理失敗，請稍後重試',
     clearRecycleBinIncomplete: '回收站未能完全清理，請稍後重試',
+    clearRecycleBinEmpty: '回收站已為空',
     refreshSuccess: '帳號 {name} 權杖已重新整理',
     refreshFailed: '帳號 {name} 權杖重新整理失敗',
     setPrimarySuccess: '已將 {name} 設為主帳號',

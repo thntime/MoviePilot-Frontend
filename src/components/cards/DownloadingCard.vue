@@ -63,10 +63,11 @@ const netdiskSourceText = computed(() =>
   netdiskPlatformText.value ? `${netdiskPlatformText.value}${netdiskShareCode.value}` : '',
 )
 // 后端已给出分享地址时直接使用，否则按平台前缀由分享码拼接；拼不出地址时退化为纯文本。
+// 链接与展示共用 netdiskShareCode，历史任务把分享码放在 name 时也保持可点击。
 const shareHref = computed(() => {
   const explicitUrl = String(props.info?.share_url || '').trim()
   if (explicitUrl) return explicitUrl
-  return buildNetdiskShareUrl(netdiskPlatform.value, String(props.info?.share_code || ''))
+  return buildNetdiskShareUrl(netdiskPlatform.value, netdiskShareCode.value)
 })
 const secondaryTitleText = computed(() => netdiskSourceText.value || String(props.info?.title || '').trim())
 // 未识别任务的主标题会回退到种子名/分享码，此时不再重复展示同一行。

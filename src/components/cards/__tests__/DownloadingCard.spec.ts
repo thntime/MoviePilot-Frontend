@@ -555,6 +555,21 @@ describe('DownloadingCard netdisk share link', () => {
     expect(link).toHaveAttribute('href', 'https://pan.quark.cn/s/abc123')
   })
 
+  it('test_share_code_falls_back_to_name_for_the_link', async () => {
+    await renderCard(
+      downloading({
+        netdisk_platform: 'quark',
+        share_code: undefined,
+        share_url: undefined,
+        name: 'abc123',
+        title: 'quark:abc123',
+      }),
+    )
+
+    const link = screen.getByRole('link', { name: 'abc123' })
+    expect(link).toHaveAttribute('href', 'https://pan.quark.cn/s/abc123')
+  })
+
   it('test_share_code_plain_text_without_code', async () => {
     await renderCard(
       downloading({
