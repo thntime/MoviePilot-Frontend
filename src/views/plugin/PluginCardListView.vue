@@ -2,6 +2,7 @@
 import { useToast } from 'vue-toastification'
 import api from '@/api'
 import { getApiBusinessErrorMessage } from '@/api/client'
+import { getPluginRatings } from '@/api/pluginRating'
 import {
   changePluginSource,
   getPluginSourceOptions,
@@ -260,6 +261,11 @@ const installedLoadError = ref(false)
 const isAppMarketLoaded = ref(false)
 
 const marketLoadError = ref(false)
+
+// 只复用当前页面最近五分钟的完整市场清单；手动刷新和配置、安装变更仍重新查询。
+const MARKET_CACHE_TTL = 5 * 60 * 1000
+let marketFetchedAt = Number.NEGATIVE_INFINITY
+let marketInstalledKey = ''
 
 // APP市场窗口
 const PluginAppDialog = ref(false)
@@ -1378,6 +1384,7 @@ function restorePluginToMarket(plugin: Plugin) {
   initOptions(plugin)
 }
 
+/** 同一轮市场刷新的下载统计和评分快照，缺失项表示对应请求失败。 */
 interface PluginMarketMetrics {
   statistics?: { [key: string]: number }
   ratings?: { [key: string]: PluginRating }
@@ -1386,7 +1393,11 @@ interface PluginMarketMetrics {
 type CompletePluginMarketMetrics = Required<PluginMarketMetrics>
 
 /** 将市场快照一次性投影到列表和过滤选项，避免请求过程暴露半成品状态。 */
-function applyMarketSnapshot(marketResponse: Plugin[], metrics?: CompletePluginMarketMetrics) {
+function applyMarketSnapshot(
+  marketResponse: Plugin[],
+  metrics?: CompletePluginMarketMetrics,
+  installedKey = getMarketInstalledKey(),
+) {
   if (metrics) {
     PluginStatistics.value = metrics.statistics
     PluginRatings.value = metrics.ratings
@@ -1403,15 +1414,35 @@ function applyMarketSnapshot(marketResponse: Plugin[], metrics?: CompletePluginM
   marketList.value.forEach(initOptions)
   isAppMarketLoaded.value = true
   marketLoadError.value = false
+  marketFetchedAt = Date.now()
+  marketInstalledKey = installedKey
 }
 
-// 获取未安装插件列表数据
+/** 为市场清单的复用记录当前安装身份与版本，避免外部安装、更新后沿用旧清单。 */
+function getMarketInstalledKey(): string {
+  return JSON.stringify(dataList.value.map(plugin => [plugin.id, plugin.plugin_version, plugin.repo_url]).sort())
+}
+
+/** 查询完整市场清单，页面再次激活时复用短期快照，保留全局搜索、排序与过滤选项。 */
 async function fetchUninstalledPlugins(
   force: boolean = false,
   context: KeepAliveRefreshContext = {},
   commit = true,
 ): Promise<Plugin[] | undefined> {
   const generation = ++marketWriterGeneration
+  const installedKey = getMarketInstalledKey()
+  if (
+    !force &&
+    !isMarketRefreshing.value &&
+    context.silent &&
+    context.source === 'activated' &&
+    isAppMarketLoaded.value &&
+    installedKey === marketInstalledKey &&
+    Date.now() - marketFetchedAt < MARKET_CACHE_TTL
+  )
+    return uninstalledList.value
+  // 一旦需要新清单，失败前的旧清单不再算作新鲜结果，便于下一次激活重试。
+  marketFetchedAt = Number.NEGATIVE_INFINITY
   if (!context.silent || !isAppMarketLoaded.value) {
     marketLoadError.value = false
   }
@@ -1425,7 +1456,7 @@ async function fetchUninstalledPlugins(
     })
     if (generation !== marketWriterGeneration) return
 
-    if (commit) applyMarketSnapshot(marketResponse)
+    if (commit) applyMarketSnapshot(marketResponse, undefined, installedKey)
     return marketResponse
   } catch (error) {
     console.error(error)
@@ -1436,7 +1467,7 @@ async function fetchUninstalledPlugins(
   }
 }
 
-// 加载插件统计数据
+/** 加载插件安装统计，丢弃被新一轮刷新替代的结果。 */
 async function fetchPluginStatistics(): Promise<{ [key: string]: number } | undefined> {
   const generation = ++statisticWriterGeneration
   try {
@@ -1448,7 +1479,7 @@ async function fetchPluginStatistics(): Promise<{ [key: string]: number } | unde
   }
 }
 
-/** 批量加载插件评分并合并到已安装和市场插件对象。 */
+/** 不在 URL 中传递 ID 列表，加载完整评分后仅返回当前列表仍可接纳的快照。 */
 async function fetchPluginRatings(
   plugins: Plugin[] = marketList.value,
   marketGeneration = marketWriterGeneration,
@@ -1460,16 +1491,7 @@ async function fetchPluginRatings(
   }
 
   try {
-    const ratings: { [key: string]: PluginRating } = {}
-    for (let start = 0; start < pluginIds.length; start += 100) {
-      const chunk = pluginIds.slice(start, start + 100)
-      const response: { [key: string]: PluginRating } = await api.get('plugin/rating', {
-        params: {
-          plugin_ids: chunk.join(','),
-        },
-      })
-      Object.assign(ratings, response)
-    }
+    const ratings = await getPluginRatings(pluginIds)
 
     const currentPluginIds = Array.from(
       new Set([...dataList.value, ...plugins].map(plugin => plugin.id).filter(Boolean)),
@@ -1557,6 +1579,7 @@ async function refreshMarketData(
   context: KeepAliveRefreshContext = {},
   resetScroll = false,
 ): Promise<boolean> {
+  const installedKey = getMarketInstalledKey()
   const marketResponse = await fetchUninstalledPlugins(force, context, false)
   if (!marketResponse) return false
 
@@ -1567,10 +1590,14 @@ async function refreshMarketData(
     return false
   }
 
-  applyMarketSnapshot(marketResponse, {
-    statistics: metrics.statistics,
-    ratings: metrics.ratings,
-  })
+  applyMarketSnapshot(
+    marketResponse,
+    {
+      statistics: metrics.statistics,
+      ratings: metrics.ratings,
+    },
+    installedKey,
+  )
   if (resetScroll) {
     marketVisibleCount.value = marketPageSize
     tabScrollPositions.market = 0
