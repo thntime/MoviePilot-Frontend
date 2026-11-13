@@ -5867,6 +5867,12 @@ export default {
   netdisk: {
     title: '網盤帳號',
     description: '管理各網盤平台的登入帳號，憑證儲存後不再回顯',
+    platformSwitch: {
+      title: '平台啟用',
+      description: '按平台控制網盤功能是否啟用，已儲存的帳號不受影響',
+      saveSuccess: '平台啟用狀態已儲存',
+      saveFailed: '平台啟用狀態儲存失敗，已還原原狀態',
+    },
     list: {
       label: '帳號列表',
       search: '搜尋帳號',

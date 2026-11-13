@@ -5875,6 +5875,12 @@ export default {
   netdisk: {
     title: '网盘账号',
     description: '管理各网盘平台的登录账号，凭据保存后不再回显',
+    platformSwitch: {
+      title: '平台启用',
+      description: '按平台控制网盘功能是否启用，已保存的账号不受影响',
+      saveSuccess: '平台启用状态已保存',
+      saveFailed: '平台启用状态保存失败，已恢复原状态',
+    },
     list: {
       label: '账号列表',
       search: '搜索账号',

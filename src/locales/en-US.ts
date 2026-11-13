@@ -6039,6 +6039,12 @@ export default {
   netdisk: {
     title: 'Netdisk Accounts',
     description: 'Manage sign-in accounts for each cloud drive platform. Credentials are never shown after saving.',
+    platformSwitch: {
+      title: 'Enabled Platforms',
+      description: 'Turn netdisk platforms on or off. Saved accounts are kept.',
+      saveSuccess: 'Platform switches saved',
+      saveFailed: 'Failed to save platform switches. Previous state restored.',
+    },
     list: {
       label: 'Accounts',
       search: 'Search accounts',
