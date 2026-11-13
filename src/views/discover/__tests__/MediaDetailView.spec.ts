@@ -1301,3 +1301,248 @@ describe('MediaDetailView subscriptions, seasons, and episode groups', () => {
     expect(screen.getByRole('heading', { name: '1 - B 组第一集' })).toBeInTheDocument()
   })
 })
+
+describe('MediaDetailView episode missing filter', () => {
+  beforeEach(() => {
+    mocks.openSharedDialog.mockReturnValue({ close: vi.fn(), id: 1, updateProps: vi.fn() })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  function createFilterMedia(tmdbId: number) {
+    return createSubscribeTv({
+      season_info: [createMediaSeason({ episode_count: 3, season_number: 1 })],
+      title: '缺失筛选剧',
+      tmdb_id: tmdbId,
+    })
+  }
+
+  function installSeasonData(tmdbId: number, exists: Record<number, number[]>, episodes: TmdbEpisode[]) {
+    server.use(mediaRemoteExistsHandler(exists), tmdbSeasonEpisodesHandler(tmdbId, 1, episodes))
+  }
+
+  function createThreeEpisodes(names: string[] = ['第一集', '第二集', '第三集'], seasonNumber = 1) {
+    return names.map((name, index) =>
+      createTmdbEpisode({ episode_number: index + 1, name, season_number: seasonNumber }),
+    )
+  }
+
+  async function expandFirstSeason(container: Element) {
+    await waitFor(() => expect(container.querySelector('.v-expansion-panel-title')).toBeInTheDocument())
+    await fireEvent.click(container.querySelector('.v-expansion-panel-title') as HTMLElement)
+  }
+
+  async function chooseFilter(optionName: string) {
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('combobox'))
+    await user.click(await screen.findByRole('option', { name: optionName }))
+  }
+
+  it('shows the filter for a partially missing season and defaults to all episodes', async () => {
+    const media = createFilterMedia(8801)
+    const { container } = await renderDetail({
+      media,
+      notExists: [createNotExistMediaInfo({ episodes: [2], season: 1, total_episode: 3 })],
+      setupHandlers: () => installSeasonData(8801, { 1: [1, 3] }, createThreeEpisodes()),
+      type: '电视剧',
+    })
+
+    await expandFirstSeason(container)
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '1 - 第一集' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '2 - 第二集' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '3 - 第三集' })).toBeInTheDocument()
+  })
+
+  it('filters to missing episodes only and restores the full list', async () => {
+    const media = createFilterMedia(8802)
+    const existsRemoteRequest = vi.fn()
+    const seasonEpisodesRequest = vi.fn()
+    const { container } = await renderDetail({
+      media,
+      notExists: [createNotExistMediaInfo({ episodes: [2], season: 1, total_episode: 3 })],
+      setupHandlers: () => {
+        server.use(
+          mediaRemoteExistsHandler({ 1: [1, 3] }, 200, existsRemoteRequest),
+          tmdbSeasonEpisodesHandler(8802, 1, createThreeEpisodes(), 200, seasonEpisodesRequest),
+        )
+      },
+      type: '电视剧',
+    })
+
+    await expandFirstSeason(container)
+    await waitFor(() => {
+      expect(existsRemoteRequest).toHaveBeenCalledOnce()
+      expect(seasonEpisodesRequest).toHaveBeenCalledOnce()
+    })
+
+    await chooseFilter('仅看缺失')
+
+    await waitFor(() => expect(screen.queryByRole('heading', { name: '1 - 第一集' })).not.toBeInTheDocument())
+    expect(screen.queryByRole('heading', { name: '3 - 第三集' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '2 - 第二集' })).toBeInTheDocument()
+
+    await chooseFilter('全部')
+
+    expect(await screen.findByRole('heading', { name: '1 - 第一集' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '2 - 第二集' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '3 - 第三集' })).toBeInTheDocument()
+    expect(existsRemoteRequest).toHaveBeenCalledOnce()
+    expect(seasonEpisodesRequest).toHaveBeenCalledOnce()
+  })
+
+  it('keeps other seasons unaffected by the filter', async () => {
+    const media = createSubscribeTv({
+      season_info: [
+        createMediaSeason({ episode_count: 3, season_number: 1 }),
+        createMediaSeason({ episode_count: 3, season_number: 2 }),
+      ],
+      title: '缺失筛选剧',
+      tmdb_id: 8808,
+    })
+    const { container } = await renderDetail({
+      media,
+      notExists: [
+        createNotExistMediaInfo({ episodes: [2], season: 1, total_episode: 3 }),
+        createNotExistMediaInfo({ episodes: [2], season: 2, total_episode: 3 }),
+      ],
+      setupHandlers: () => {
+        server.use(
+          mediaRemoteExistsHandler({ 1: [1, 3], 2: [1, 3] }),
+          tmdbSeasonEpisodesHandler(8808, 1, createThreeEpisodes()),
+          tmdbSeasonEpisodesHandler(8808, 2, createThreeEpisodes(['S2 第一集', 'S2 第二集', 'S2 第三集'], 2)),
+        )
+      },
+      type: '电视剧',
+    })
+
+    const getPanels = () => container.querySelectorAll('.v-expansion-panel')
+    await waitFor(() => expect(getPanels()).toHaveLength(2))
+    const panels = getPanels()
+
+    await fireEvent.click(panels[0].querySelector('.v-expansion-panel-title') as HTMLElement)
+    const user = userEvent.setup()
+    await user.click(await within(panels[0] as HTMLElement).findByRole('combobox'))
+    await user.click(await screen.findByRole('option', { name: '仅看缺失' }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: '1 - 第一集' })).not.toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: '2 - 第二集' })).toBeInTheDocument()
+
+    await fireEvent.click(panels[1].querySelector('.v-expansion-panel-title') as HTMLElement)
+
+    expect(await within(panels[1] as HTMLElement).findByRole('combobox')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '1 - S2 第一集' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '2 - S2 第二集' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '3 - S2 第三集' })).toBeInTheDocument()
+  })
+
+  it('keeps the filter state when the season is collapsed and expanded again', async () => {
+    const media = createFilterMedia(8803)
+    const { container } = await renderDetail({
+      media,
+      notExists: [createNotExistMediaInfo({ episodes: [2], season: 1, total_episode: 3 })],
+      setupHandlers: () => installSeasonData(8803, { 1: [1, 3] }, createThreeEpisodes()),
+      type: '电视剧',
+    })
+
+    await expandFirstSeason(container)
+    await chooseFilter('仅看缺失')
+    await waitFor(() => expect(screen.queryByRole('heading', { name: '1 - 第一集' })).not.toBeInTheDocument())
+
+    await fireEvent.click(container.querySelector('.v-expansion-panel-title') as HTMLElement)
+    await fireEvent.click(container.querySelector('.v-expansion-panel-title') as HTMLElement)
+
+    await waitFor(() => expect(screen.queryByRole('heading', { name: '1 - 第一集' })).not.toBeInTheDocument())
+    expect(screen.queryByRole('heading', { name: '3 - 第三集' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '2 - 第二集' })).toBeInTheDocument()
+  })
+
+  it('does not show the filter for a fully missing season', async () => {
+    const media = createFilterMedia(8804)
+    const { container } = await renderDetail({
+      media,
+      notExists: [createNotExistMediaInfo({ episodes: [], season: 1, total_episode: 3 })],
+      setupHandlers: () => installSeasonData(8804, { 1: [] }, createThreeEpisodes()),
+      type: '电视剧',
+    })
+
+    await expandFirstSeason(container)
+
+    await waitFor(() => expect(container.querySelector('.v-expansion-panel')).toHaveTextContent('缺失'))
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  })
+
+  it('does not show the filter for an in-library season', async () => {
+    const media = createFilterMedia(8807)
+    const { container } = await renderDetail({
+      media,
+      setupHandlers: () => installSeasonData(8807, { 1: [1, 2, 3] }, createThreeEpisodes()),
+      type: '电视剧',
+    })
+
+    await expandFirstSeason(container)
+
+    await waitFor(() => expect(container.querySelector('.v-expansion-panel')).toHaveTextContent('已入库'))
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  })
+
+  it('does not show the filter when the episode existence data is unavailable', async () => {
+    const media = createFilterMedia(8805)
+    const { container } = await renderDetail({
+      media,
+      notExists: [createNotExistMediaInfo({ episodes: [2], season: 1, total_episode: 3 })],
+      setupHandlers: () => {
+        server.use(
+          mediaRemoteExistsHandler({}, 500),
+          tmdbSeasonEpisodesHandler(8805, 1, createThreeEpisodes()),
+        )
+      },
+      type: '电视剧',
+    })
+
+    await expandFirstSeason(container)
+
+    await waitFor(() => expect(container.querySelector('.v-expansion-panel')).toHaveTextContent('部分缺失'))
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  })
+
+  it('resets the filter after switching the episode group', async () => {
+    const media = createFilterMedia(8806)
+    const groups = [
+      { episode_count: 3, group_count: 1, id: 'group-a', name: '剪辑组 A' },
+      { episode_count: 3, group_count: 1, id: 'group-b', name: '剪辑组 B' },
+    ]
+    const { container } = await renderDetail({
+      episodeGroups: groups,
+      media,
+      notExists: [createNotExistMediaInfo({ episodes: [2], season: 1, total_episode: 3 })],
+      setupHandlers: () => {
+        server.use(
+          mediaGroupSeasonsHandler('group-a', [createMediaSeason({ episode_count: 3, season_number: 1 })]),
+          mediaGroupSeasonsHandler('group-b', [createMediaSeason({ episode_count: 3, season_number: 1 })]),
+          mediaRemoteExistsHandler({ 1: [1, 3] }),
+          http.get(new URL('tmdb/8806/1', API_BASE_URL).href, ({ request }) => {
+            const group = new URL(request.url).searchParams.get('episode_group')
+            return apiJson(createThreeEpisodes([`${group} 第一集`, `${group} 第二集`, `${group} 第三集`]))
+          }),
+        )
+      },
+      type: '电视剧',
+    })
+
+    await fireEvent.click(screen.getByRole('button', { name: /剪辑组 A/ }))
+    await expandFirstSeason(container)
+    await chooseFilter('仅看缺失')
+    await waitFor(() => expect(screen.queryByRole('heading', { name: '1 - group-a 第一集' })).not.toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: '2 - group-a 第二集' })).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('button', { name: /剪辑组 B/ }))
+    await expandFirstSeason(container)
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '1 - group-b 第一集' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '2 - group-b 第二集' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '3 - group-b 第三集' })).toBeInTheDocument()
+  })
+})
+

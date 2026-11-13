@@ -1705,6 +1705,11 @@ export default {
     specials: 'Specials',
     seasonNumber: 'Season {number}',
     episodeCount: '{count} Episodes',
+    episodeFilter: {
+      label: 'Episode filter',
+      all: 'All',
+      missing: 'Missing only',
+    },
     episodeGroups: {
       select: 'Select Episode Group',
       default: 'Default',

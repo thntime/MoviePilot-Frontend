@@ -1665,6 +1665,11 @@ export default {
     specials: '特別篇',
     seasonNumber: '第 {number} 季',
     episodeCount: '{count}集',
+    episodeFilter: {
+      label: '集篩選',
+      all: '全部',
+      missing: '僅看缺失',
+    },
     episodeGroups: {
       select: '選擇劇集組',
       default: '預設',

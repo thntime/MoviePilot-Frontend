@@ -91,6 +91,10 @@ const existsEpisodes = ref({} as { [key: number]: number[] })
 // 各季缺失状态：0-已入库 1-部分缺失 2-全部缺失，没有数据也是已入库
 const seasonsNotExisted = ref<{ [key: number]: number }>({})
 
+// 各季集筛选方式：all-全部 missing-仅看缺失
+type EpisodeFilter = 'all' | 'missing'
+const episodeFilters = ref<{ [key: number]: EpisodeFilter }>({})
+
 // 各季的订阅状态
 const seasonsSubscribed = ref<{ [key: number]: boolean }>({})
 
@@ -311,6 +315,7 @@ async function checkSeasonsNotExists() {
   if (mediaDetail.value.type !== '电视剧') return
   const requestId = ++seasonNotExistsRequestId
   seasonsNotExisted.value = {}
+  episodeFilters.value = {}
   try {
     const media = {
       ...mediaDetail.value,
@@ -630,6 +635,28 @@ function getExistText(season: number) {
 // 判断指定季集是否已存在于媒体服务器
 function isEpisodeExists(season: number, episode: number) {
   return existsEpisodes.value[season]?.includes(episode) ?? false
+}
+
+// 获取指定季的集筛选方式
+function getEpisodeFilter(season: number): EpisodeFilter {
+  return episodeFilters.value[season] ?? 'all'
+}
+
+// 设置指定季的集筛选方式
+function setEpisodeFilter(season: number, value: EpisodeFilter) {
+  episodeFilters.value = { ...episodeFilters.value, [season]: value }
+}
+
+// 是否显示指定季的缺失筛选（仅部分缺失且存在数据已加载时可用）
+function canFilterMissingEpisodes(season: number) {
+  return seasonsNotExisted.value[season] === 1 && Array.isArray(existsEpisodes.value[season])
+}
+
+// 按筛选方式返回指定季应展示的集
+function getVisibleEpisodes(season: number) {
+  const episodes = seasonEpisodesInfo.value[season]
+  if (!episodes || getEpisodeFilter(season) !== 'missing') return episodes
+  return episodes.filter(episode => !isEpisodeExists(season, episode.episode_number || 0))
 }
 
 // 计算订阅图标
@@ -1106,6 +1133,21 @@ useNativePageHeader({
                         >
                           {{ getExistText(season.season_number || 0) }}
                         </VChip>
+                        <VSelect
+                          v-if="canFilterMissingEpisodes(season.season_number || 0)"
+                          :model-value="getEpisodeFilter(season.season_number || 0)"
+                          :items="[
+                            { title: t('media.episodeFilter.all'), value: 'all' },
+                            { title: t('media.episodeFilter.missing'), value: 'missing' },
+                          ]"
+                          :label="t('media.episodeFilter.label')"
+                          class="episode-missing-filter ms-1"
+                          density="compact"
+                          hide-details
+                          variant="outlined"
+                          @click.stop
+                          @update:model-value="setEpisodeFilter(season.season_number || 0, $event as EpisodeFilter)"
+                        />
                         <IconBtn
                           v-if="canSubscribe"
                           class="ms-1"
@@ -1126,7 +1168,7 @@ useNativePageHeader({
                     <LoadingBanner v-if="!seasonEpisodesInfo[season.season_number || 0]" class="mt-3" />
                     <div class="flex flex-col justify-center divide-y divide-gray-700">
                       <div
-                        v-for="episode in seasonEpisodesInfo[season.season_number || 0]"
+                        v-for="episode in getVisibleEpisodes(season.season_number || 0)"
                         :key="episode.episode_number"
                         class="flex flex-col space-y-4 py-4 xl:flex-row xl:space-y-4 xl:space-x-4"
                       >
@@ -1701,6 +1743,13 @@ a.crew-name {
   position: absolute;
   inset-block-start: 0.125rem;
   inset-inline-end: 0;
+}
+
+.episode-missing-filter {
+  display: inline-flex;
+  max-inline-size: 8.5rem;
+  min-inline-size: 7rem;
+  vertical-align: middle;
 }
 
 .episode-group-label {
