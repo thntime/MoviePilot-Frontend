@@ -115,8 +115,10 @@ function normalizeEnabledPlatforms(list: readonly string[]): string[] {
 async function loadEnabledPlatforms() {
   try {
     const result = await api.get<{ value?: string[] }>('system/setting/NetdiskEnabledPlatforms')
+    const value = result?.value
+    // 非数组异常数据按未配置处理，避免字符串被按字符展开成错误开关状态
     enabledPlatforms.value =
-      result?.value == null ? [...NETDISK_PLATFORMS] : normalizeEnabledPlatforms(result.value)
+      Array.isArray(value) ? normalizeEnabledPlatforms(value) : [...NETDISK_PLATFORMS]
   } catch (error) {
     console.error(error)
     enabledPlatforms.value = [...NETDISK_PLATFORMS]
@@ -278,9 +280,16 @@ onMounted(() => {
   loadEnabledPlatforms()
 })
 
-useSilentSettingRefresh(() => fetchData(), {
-  active: computed(() => props.active),
-})
+useSilentSettingRefresh(
+  async () => {
+    await fetchData()
+    // 保存中跳过，避免静默刷新覆盖用户刚切换的本地状态
+    if (!platformSaving.value) await loadEnabledPlatforms()
+  },
+  {
+    active: computed(() => props.active),
+  },
+)
 </script>
 
 <template>
