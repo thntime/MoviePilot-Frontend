@@ -1096,8 +1096,8 @@ export interface Site {
   limit_seconds?: number
   // 是否启用
   is_active: boolean
-  // 站点类型：PT 站点 / CD 站点（TG 频道复用同一 kind 字段）
-  kind?: 'pt' | 'cd' | 'tg'
+  // 站点类型：PT 站点 / CD 站点 / PS 站点（TG 频道复用同一 kind 字段）
+  kind?: 'pt' | 'cd' | 'tg' | 'ps'
   // 认证方式：Cookie / API / AUTH（CD 站点专用）
   auth_type?: 'cookie' | 'api' | 'auth'
   // CD 站点登录用户名

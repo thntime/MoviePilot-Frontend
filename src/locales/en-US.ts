@@ -2245,6 +2245,7 @@ export default {
     kindOptions: {
       pt: 'PT',
       cd: 'CD',
+      ps: 'PS',
     },
     authOptions: {
       cookie: 'COOKIE',
@@ -2278,13 +2279,14 @@ export default {
     },
     hints: {
       url: 'Format: http://www.example.com/',
-      kind: 'PT sites use Cookie or API authentication; CD sites use CloudSaver account authentication',
+      kind: 'PT sites use Cookie or API authentication; CD sites use CloudSaver account authentication; PS sites use a PanSou service address',
       name: 'Display name of the site, required for CD sites',
       authType: 'Choose how the site credentials are submitted',
       username: 'Login username of the CD site',
       password: 'Login password of the CD site, leave empty to keep the current one when editing',
       authRefreshInterval: 'Token refresh interval of the CD site, 300 minutes by default',
       timeoutCd: 'CD site request timeout in seconds, 90 by default',
+      timeoutPs: 'PS site request timeout in seconds, 30 by default',
       priority: 'Lower priority value means higher priority',
       status: 'Enable/Disable site',
       rss: 'Subscription link used when subscription mode is `Site RSS`, manual input if not auto-retrieved',

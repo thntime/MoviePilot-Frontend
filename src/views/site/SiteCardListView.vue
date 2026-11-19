@@ -66,7 +66,7 @@ const savingPriority = ref(false)
 // 筛选相关
 const filterMenu = ref(false)
 const filterOption = ref('all') // all, active, inactive, connected, slow, failed, unknown
-const kindFilter = ref<'all' | 'pt' | 'cd'>('all')
+const kindFilter = ref<'all' | 'pt' | 'cd' | 'ps'>('all')
 // 原生操作从系统顶栏发起，仍打开同一份 HTML 筛选菜单。
 const siteFilterActivator = computed(() =>
   nativeChromeActive.value ? '[data-native-menu-anchor][data-menu-activator="site-filter-btn"]' : undefined,
@@ -84,10 +84,11 @@ const filterOptions = computed(() => [
 ])
 
 // 站点类型筛选选项
-const kindFilterOptions = computed<{ value: 'all' | 'pt' | 'cd'; label: string; icon: string }[]>(() => [
+const kindFilterOptions = computed<{ value: 'all' | 'pt' | 'cd' | 'ps'; label: string; icon: string }[]>(() => [
   { value: 'all', label: t('common.all'), icon: 'mdi-shape-outline' },
   { value: 'pt', label: t('site.kindOptions.pt'), icon: 'mdi-account-key-outline' },
   { value: 'cd', label: t('site.kindOptions.cd'), icon: 'mdi-cloud-outline' },
+  { value: 'ps', label: t('site.kindOptions.ps'), icon: 'mdi-cloud-search-outline' },
 ])
 
 // 是否存在任一筛选条件
@@ -270,7 +271,7 @@ function selectFilter(value: string) {
 }
 
 // 选择站点类型筛选
-function selectKindFilter(value: 'all' | 'pt' | 'cd') {
+function selectKindFilter(value: 'all' | 'pt' | 'cd' | 'ps') {
   kindFilter.value = value
   filterMenu.value = false
 }

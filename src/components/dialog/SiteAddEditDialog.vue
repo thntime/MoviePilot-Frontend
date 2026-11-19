@@ -54,14 +54,25 @@ const authType = ref<'cookie' | 'api' | 'auth'>('cookie')
 // 是否为 CD 站点
 const isCdSite = computed(() => siteForm.value.kind === 'cd')
 
+// 是否为 PS 站点（PanSou 网盘搜索）
+const isPsSite = computed(() => siteForm.value.kind === 'ps')
+
+// 网盘站点（CD / PS）不使用 PT 专属字段
+const isNetdiskSite = computed(() => isCdSite.value || isPsSite.value)
+
 // 站点类型选项
 const kindItems = computed(() => [
   { title: t('site.kindOptions.pt'), value: 'pt' },
   { title: t('site.kindOptions.cd'), value: 'cd' },
+  { title: t('site.kindOptions.ps'), value: 'ps' },
 ])
 
-// 超时提示：CD 站点默认 90 秒
-const timeoutHint = computed(() => (isCdSite.value ? t('site.hints.timeoutCd') : t('site.hints.timeout')))
+// 超时提示：CD 站点默认 90 秒，PS 站点默认 30 秒
+const timeoutHint = computed(() => {
+  if (isCdSite.value) return t('site.hints.timeoutCd')
+  if (isPsSite.value) return t('site.hints.timeoutPs')
+  return t('site.hints.timeout')
+})
 
 // 是否限流
 const isLimit = ref(false)
@@ -109,11 +120,14 @@ async function fetchSiteInfo() {
     siteForm.value = await api.get(`site/${props.siteid}`)
     siteForm.value.proxy = siteForm.value.proxy === 1
     siteForm.value.render = siteForm.value.render === 1
-    siteForm.value.kind = siteForm.value.kind === 'cd' ? 'cd' : 'pt'
+    // 保留 PS 类型，避免编辑时被压成 PT
+    siteForm.value.kind = ['cd', 'ps'].includes(siteForm.value.kind ?? '') ? siteForm.value.kind : 'pt'
     // 兼容旧数据：无认证方式时按已有凭据推断
     const hasApiCredential = !!(siteForm.value.apikey || siteForm.value.token)
     if (siteForm.value.kind === 'cd') {
       authType.value = 'auth'
+    } else if (siteForm.value.kind === 'ps') {
+      authType.value = 'api'
     } else if (siteForm.value.auth_type === 'api') {
       authType.value = 'api'
     } else if (!siteForm.value.auth_type && hasApiCredential) {
@@ -133,22 +147,28 @@ async function fetchSiteInfo() {
 }
 
 // 切换站点类型时重置不兼容字段，避免提交残留值
-function handleKindChange(value: 'pt' | 'cd') {
+function handleKindChange(value: 'pt' | 'cd' | 'ps') {
   siteForm.value.kind = value
-  if (value === 'cd') {
-    authType.value = 'auth'
+  if (value === 'cd' || value === 'ps') {
+    // CD 用账号认证，PS 用可选的 Bearer token，两者都不走网页 Cookie
+    authType.value = value === 'cd' ? 'auth' : 'api'
     siteForm.value.rss = ''
     siteForm.value.cookie = ''
     siteForm.value.ua = ''
-    siteForm.value.token = ''
-    siteForm.value.apikey = ''
+    if (value === 'cd') {
+      siteForm.value.token = ''
+      siteForm.value.apikey = ''
+      if (!siteForm.value.auth_refresh_interval) siteForm.value.auth_refresh_interval = 300
+    }
     siteForm.value.render = false
     siteForm.value.downloader = ''
     isLimit.value = false
     siteForm.value.limit_interval = 0
     siteForm.value.limit_count = 0
     siteForm.value.limit_seconds = 0
-    if (!siteForm.value.auth_refresh_interval) siteForm.value.auth_refresh_interval = 300
+    if (!siteForm.value.timeout || siteForm.value.timeout === 15) {
+      siteForm.value.timeout = value === 'cd' ? 90 : 30
+    }
   } else {
     if (authType.value === 'auth') authType.value = 'cookie'
     siteForm.value.username = null
@@ -157,26 +177,31 @@ function handleKindChange(value: 'pt' | 'cd') {
   siteForm.value.auth_type = authType.value
 }
 
-// 生成提交数据：密码仅在填写时携带，CD 站点固定 AUTH 认证
+// 生成提交数据：密码仅在填写时携带，CD 站点固定 AUTH 认证，PS 站点固定 API 认证
 function buildSitePayload(): SiteForm {
   const payload: SiteForm = { ...siteForm.value }
   const isCd = payload.kind === 'cd'
-  payload.kind = isCd ? 'cd' : 'pt'
-  payload.auth_type = isCd ? 'auth' : authType.value === 'api' ? 'api' : 'cookie'
+  const isPs = payload.kind === 'ps'
+  payload.kind = isCd ? 'cd' : isPs ? 'ps' : 'pt'
+  payload.auth_type = isCd ? 'auth' : isPs ? 'api' : authType.value === 'api' ? 'api' : 'cookie'
   payload.auth_refresh_interval = isCd ? Number(payload.auth_refresh_interval) || 300 : 300
   payload.username = isCd ? payload.username?.trim() || null : null
-  if (isCd) {
-    // CD 站点不使用 PT 专属字段
+  if (isCd || isPs) {
+    // 网盘站点不使用 PT 专属字段；PS 保留 token 作为 Bearer 凭据
     payload.rss = ''
     payload.cookie = ''
     payload.ua = ''
-    payload.token = ''
-    payload.apikey = ''
     payload.render = false
     payload.downloader = ''
     payload.limit_interval = 0
     payload.limit_count = 0
     payload.limit_seconds = 0
+    if (isCd) {
+      payload.token = ''
+      payload.apikey = ''
+    } else {
+      payload.apikey = ''
+    }
   }
   if (!isCd || !payload.password) delete payload.password
   return payload
@@ -211,7 +236,7 @@ async function updateSiteInfo() {
   startNProgress()
   try {
     const payload = buildSitePayload()
-    if (!isCdSite.value && isLimit.value) {
+    if (!isNetdiskSite.value && isLimit.value) {
       payload.limit_interval = payload.limit_interval || 0
       payload.limit_count = payload.limit_count || 0
       payload.limit_seconds = payload.limit_seconds || 0
@@ -260,7 +285,7 @@ onMounted(async () => {
       <VCardText>
         <VForm @submit.prevent="() => {}">
           <VRow>
-            <VCol cols="12" :md="isCdSite ? 3 : 4">
+            <VCol cols="12" :md="isNetdiskSite ? 3 : 4">
               <VSelect
                 v-model="siteForm.kind"
                 :items="kindItems"
@@ -271,7 +296,7 @@ onMounted(async () => {
                 @update:model-value="handleKindChange"
               />
             </VCol>
-            <VCol v-if="isCdSite" cols="12" md="9">
+            <VCol v-if="isNetdiskSite" cols="12" md="9">
               <VTextField
                 v-model="siteForm.name"
                 :label="t('site.fields.name')"
@@ -316,7 +341,7 @@ onMounted(async () => {
             </VCol>
           </VRow>
           <VRow>
-            <VCol v-if="!isCdSite" cols="12" md="6">
+            <VCol v-if="!isNetdiskSite" cols="12" md="6">
               <VTextField
                 v-model="siteForm.rss"
                 :label="t('site.fields.rss')"
@@ -325,17 +350,17 @@ onMounted(async () => {
                 prepend-inner-icon="mdi-rss"
               />
             </VCol>
-            <VCol cols="6" :md="isCdSite ? 6 : 3">
+            <VCol cols="6" :md="isNetdiskSite ? 6 : 3">
               <VTextField
                 v-model="siteForm.timeout"
                 :label="t('site.fields.timeout')"
                 :hint="timeoutHint"
-                :placeholder="isCdSite ? '90' : undefined"
+                :placeholder="isCdSite ? '90' : isPsSite ? '30' : undefined"
                 persistent-hint
                 prepend-inner-icon="mdi-timer"
               />
             </VCol>
-            <VCol v-if="!isCdSite" cols="6" md="3">
+            <VCol v-if="!isNetdiskSite" cols="6" md="3">
               <VAutocomplete
                 v-model="siteForm.downloader"
                 :label="t('site.fields.downloader')"
@@ -348,7 +373,7 @@ onMounted(async () => {
           </VRow>
           <div class="mt-3 mb-2 text-subtitle-2">{{ t('site.fields.authType') }}</div>
           <VTabs v-model="authType" show-arrows class="v-tabs-pill">
-            <VTab value="cookie" :disabled="isCdSite" selected-class="v-tab--selected">
+            <VTab value="cookie" :disabled="isNetdiskSite" selected-class="v-tab--selected">
               <div>
                 <VIcon size="20" start icon="mdi-cookie" />
                 {{ t('site.authOptions.cookie') }}
@@ -450,12 +475,12 @@ onMounted(async () => {
               </VRow>
             </VWindowItem>
           </VWindow>
-          <VRow v-if="!isCdSite">
+          <VRow v-if="!isNetdiskSite">
             <VCol cols="12" md="4">
               <VSwitch v-model="isLimit" :label="t('site.fields.limitAccess')" />
             </VCol>
           </VRow>
-          <VRow v-if="isLimit && !isCdSite">
+          <VRow v-if="isLimit && !isNetdiskSite">
             <VCol cols="12" md="4">
               <VTextField
                 v-model="siteForm.limit_interval"
@@ -488,7 +513,7 @@ onMounted(async () => {
             </VCol>
           </VRow>
           <VRow>
-            <VCol cols="12" :md="isCdSite ? 12 : 6">
+            <VCol cols="12" :md="isNetdiskSite ? 12 : 6">
               <VSwitch
                 v-model="siteForm.proxy"
                 :label="t('site.fields.useProxy')"
@@ -496,7 +521,7 @@ onMounted(async () => {
                 persistent-hint
               />
             </VCol>
-            <VCol v-if="!isCdSite" cols="12" md="6">
+            <VCol v-if="!isNetdiskSite" cols="12" md="6">
               <VSwitch
                 v-model="siteForm.render"
                 :label="t('site.fields.browserSimulation')"

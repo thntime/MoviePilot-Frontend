@@ -63,8 +63,18 @@ const isTgChannel = computed(() => cardProps.site?.kind === 'tg')
 // CD 站点与 PT 站点的展示与操作不同。
 const isCdSite = computed(() => cardProps.site?.kind === 'cd')
 
+// PS 站点（PanSou 网盘搜索）与 CD 站点一样没有 PT 的用户数据能力。
+const isPsSite = computed(() => cardProps.site?.kind === 'ps')
+
+// 网盘站点统一隐藏 PT 专属入口。
+const isNetdiskSite = computed(() => isCdSite.value || isPsSite.value)
+
 // 站点类型徽标文案。
-const kindLabel = computed(() => (isCdSite.value ? t('site.kindOptions.cd') : t('site.kindOptions.pt')))
+const kindLabel = computed(() => {
+  if (isCdSite.value) return t('site.kindOptions.cd')
+  if (isPsSite.value) return t('site.kindOptions.ps')
+  return t('site.kindOptions.pt')
+})
 
 // 查询站点图标
 async function getSiteIcon() {
@@ -325,7 +335,7 @@ onMounted(() => {
               <VChip
                 v-else
                 size="x-small"
-                :color="isCdSite ? 'warning' : 'primary'"
+                :color="isNetdiskSite ? 'warning' : 'primary'"
                 variant="tonal"
                 class="shrink-0"
               >
@@ -450,7 +460,7 @@ onMounted(() => {
           </VBtn>
 
           <!-- 用户数据按钮：CD 站点没有站点用户数据 -->
-          <VBtn v-if="!isCdSite" icon variant="text" @click.stop="handleSiteUserData" size="36">
+          <VBtn v-if="!isNetdiskSite" icon variant="text" @click.stop="handleSiteUserData" size="36">
             <VIcon icon="mdi-chart-bell-curve" size="20" />
           </VBtn>
 

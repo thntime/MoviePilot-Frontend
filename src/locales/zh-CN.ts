@@ -2212,6 +2212,7 @@ export default {
     kindOptions: {
       pt: 'PT',
       cd: 'CD',
+      ps: 'PS',
     },
     authOptions: {
       cookie: 'COOKIE',
@@ -2245,13 +2246,14 @@ export default {
     },
     hints: {
       url: '格式：http://www.example.com/',
-      kind: 'PT 站点使用 Cookie 或 API 认证，CD 站点使用 CloudSaver 账号认证',
+      kind: 'PT 站点使用 Cookie 或 API 认证，CD 站点使用 CloudSaver 账号认证，PS 站点使用 PanSou 服务地址',
       name: '站点显示名称，CD 站点必填',
       authType: '选择站点凭据的提交方式',
       username: 'CD 站点的登录用户名',
       password: 'CD 站点的登录密码，编辑时留空表示不修改',
       authRefreshInterval: 'CD 站点 Token 的刷新间隔，默认 300 分钟',
       timeoutCd: 'CD 站点请求超时时间（秒），默认 90',
+      timeoutPs: 'PS 站点请求超时时间（秒），默认 30',
       priority: '优先级越小越优先',
       status: '站点启用/停用',
       rss: '订阅模式为`站点RSS`时使用的订阅链接，如未自动获取需手动补充',
