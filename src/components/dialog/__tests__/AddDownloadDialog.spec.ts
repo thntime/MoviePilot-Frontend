@@ -683,6 +683,125 @@ describe('AddDownloadDialog submissions', () => {
     expect(episodeInput).toHaveValue('2')
   })
 
+  it('audits a netdisk share and fills only the missing episodes', async () => {
+    const submitted = vi.fn()
+    const auditRequest = vi.fn()
+    server.use(
+      http.post(new URL('netdisk/share/audit', API_BASE_URL).href, async ({ request }) => {
+        auditRequest(await request.json())
+        return apiJson({
+          audit: {
+            share_title: '示例分享',
+            platform: 'quark',
+            file_count: 12,
+            total_bytes: 1024,
+            truncated: false,
+            unrecognized_files: 0,
+            media: [
+              {
+                title: '示例剧',
+                year: '2026',
+                type: '电视剧',
+                recognized: true,
+                media_source: 'themoviedb',
+                media_id: '9001',
+                files: 12,
+                total_bytes: 1024,
+                seasons: [{ season: 1, episodes: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }],
+                episodes: [],
+                missing_episodes: [9, 10, 11, 12],
+                existing_episodes: [1, 2, 3, 4, 5, 6, 7, 8],
+                library_evidence: 'media_server',
+                library_state: 'present',
+                truncated: false,
+              },
+            ],
+          },
+        })
+      }),
+      downloadHandler('download/add', { data: null, message: '', success: true }, 200, submitted),
+    )
+    const user = userEvent.setup()
+    const torrent = createTorrent({
+      download_type: 'netdisk',
+      enclosure: 'https://pan.example/share/example',
+      netdisk_platform: 'quark',
+      media_id: undefined,
+      media_source: undefined,
+    })
+    await renderDialog({ torrent })
+    const episodeInput = screen.getByLabelText('指定集数')
+
+    await user.click(screen.getByTestId('netdisk-share-audit'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('netdisk-share-audit-summary')).toHaveTextContent('缺 E09-E12'),
+    )
+    expect(auditRequest).toHaveBeenCalledWith({
+      url: 'https://pan.example/share/example',
+      password: '',
+      platform: 'quark',
+    })
+
+    await user.click(screen.getByTestId('netdisk-share-audit-fill'))
+    expect(episodeInput).toHaveValue('E09-E12')
+
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+    await waitFor(() => expect(submitted).toHaveBeenCalledOnce())
+    expect(submitted.mock.calls[0][0]).toMatchObject({ episode_selection: 'E09-E12' })
+  })
+
+  it('keeps the audit summary read-only when the library has no evidence', async () => {
+    server.use(
+      http.post(new URL('netdisk/share/audit', API_BASE_URL).href, () =>
+        apiJson({
+          audit: {
+            share_title: '示例分享',
+            platform: 'quark',
+            file_count: 12,
+            total_bytes: 1024,
+            truncated: false,
+            unrecognized_files: 0,
+            media: [
+              {
+                title: '示例剧',
+                year: '2026',
+                type: '电视剧',
+                recognized: true,
+                media_source: 'themoviedb',
+                media_id: '9001',
+                files: 12,
+                total_bytes: 1024,
+                seasons: [{ season: 1, episodes: [1, 2, 3] }],
+                episodes: [],
+                missing_episodes: [],
+                existing_episodes: [],
+                library_evidence: 'none',
+                library_state: 'unknown',
+                truncated: false,
+              },
+            ],
+          },
+        }),
+      ),
+    )
+    const user = userEvent.setup()
+    await renderDialog({
+      torrent: createTorrent({
+        download_type: 'netdisk',
+        enclosure: 'https://pan.example/share/example',
+        netdisk_platform: 'quark',
+      }),
+    })
+
+    await user.click(screen.getByTestId('netdisk-share-audit'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('netdisk-share-audit-summary')).toHaveTextContent('媒体库证据不足'),
+    )
+    expect(screen.queryByTestId('netdisk-share-audit-fill')).not.toBeInTheDocument()
+  })
+
   it('hides AI preselection when the agent is disabled but keeps manual episode entry', async () => {
     const user = userEvent.setup()
     await renderDialog({
@@ -711,5 +830,125 @@ describe('AddDownloadDialog submissions', () => {
     expect(mocks.startNProgress).toHaveBeenCalledOnce()
     expect(events.done).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: '开始下载' })).not.toBeDisabled()
+  })
+
+  it('auto-audits on open and prefills the current season missing episodes', async () => {
+    const auditRequest = vi.fn()
+    server.use(
+      http.post(new URL('netdisk/share/audit', API_BASE_URL).href, async ({ request }) => {
+        auditRequest(await request.json())
+        return apiJson({
+          audit: {
+            share_title: '示例分享',
+            platform: 'quark',
+            file_count: 8,
+            total_bytes: 1024,
+            truncated: false,
+            unrecognized_files: 0,
+            media: [
+              {
+                title: '示例剧',
+                year: '2026',
+                type: '电视剧',
+                recognized: true,
+                media_source: 'themoviedb',
+                media_id: '6001',
+                files: 8,
+                total_bytes: 1024,
+                seasons: [
+                  { season: 1, episodes: [1, 2, 3, 4] },
+                  { season: 2, episodes: [1, 2, 3, 4] },
+                ],
+                episodes: [],
+                missing_episodes: [3, 4],
+                existing_episodes: [1, 2],
+                season_gaps: [
+                  { season: 1, missing_episodes: [1, 2], existing_episodes: [] },
+                  { season: 2, missing_episodes: [3, 4], existing_episodes: [1, 2] },
+                ],
+                library_evidence: 'media_server',
+                library_state: 'present',
+                truncated: false,
+              },
+            ],
+          },
+        })
+      }),
+    )
+    await renderDialog({
+      media: createMedia({ type: '电视剧', title: '示例剧', year: 2026, season: 2 }),
+      torrent: createTorrent({
+        download_type: 'netdisk',
+        enclosure: 'https://pan.example/share/example',
+        netdisk_platform: 'quark',
+        media_id: undefined,
+        media_source: undefined,
+      }),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('指定集数')).toHaveValue('E03-E04'))
+    expect(auditRequest).toHaveBeenCalledWith({
+      url: 'https://pan.example/share/example',
+      password: '',
+      platform: 'quark',
+      media_source: 'themoviedb',
+      media_id: '6001',
+      mtype: '电视剧',
+      title: '示例剧',
+      year: '2026',
+      season: 2,
+    })
+  })
+
+  it('skips the automatic audit when the dialog has no media identity', async () => {
+    const auditRequest = vi.fn()
+    server.use(
+      http.post(new URL('netdisk/share/audit', API_BASE_URL).href, () => {
+        auditRequest()
+        return apiJson({ audit: null })
+      }),
+    )
+    await renderDialog({
+      torrent: createTorrent({
+        download_type: 'netdisk',
+        enclosure: 'https://pan.example/share/example',
+        netdisk_platform: 'quark',
+        media_id: undefined,
+        media_source: undefined,
+      }),
+    })
+
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(auditRequest).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('指定集数')).toHaveValue('')
+  })
+
+  it('keeps manually typed episodes when the audit fails', async () => {
+    const auditCalls = vi.fn()
+    server.use(
+      http.post(new URL('netdisk/share/audit', API_BASE_URL).href, () => {
+        auditCalls()
+        return HttpResponse.json({ detail: 'boom' }, { status: 500 })
+      }),
+    )
+    const user = userEvent.setup()
+    await renderDialog({
+      media: createMedia({ type: '电视剧', title: '示例剧', year: 2026, season: 1 }),
+      torrent: createTorrent({
+        download_type: 'netdisk',
+        enclosure: 'https://pan.example/share/example',
+        netdisk_platform: 'quark',
+        media_id: undefined,
+        media_source: undefined,
+      }),
+    })
+    const episodeInput = screen.getByLabelText('指定集数')
+
+    await waitFor(() => expect(auditCalls).toHaveBeenCalledTimes(1))
+    await user.type(episodeInput, '5')
+    await user.click(screen.getByTestId('netdisk-share-audit'))
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalled())
+    expect(episodeInput).toHaveValue('5')
   })
 })

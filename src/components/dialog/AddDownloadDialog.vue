@@ -3,7 +3,8 @@ import { useToast } from 'vue-toastification'
 import api, { isApiBusinessFailure, isApiResponse } from '@/api'
 import { doneNProgress, startNProgress } from '@/api/nprogress'
 import { listDownloadDirectories } from '@/api/storage'
-import { previewNetdiskShare } from '@/api/netdiskFiles'
+import { auditNetdiskShare, previewNetdiskShare } from '@/api/netdiskFiles'
+import type { NetdiskShareAuditReport } from '@/api/netdiskFiles'
 import type {
   DownloadDirectory,
   DownloaderConf,
@@ -134,6 +135,9 @@ const episodeSelection = ref('')
 const aiPreviewLoading = ref(false)
 const aiAgentEnabled = computed(() => Boolean(globalSettings.AI_AGENT_ENABLE))
 const isNetdiskTorrent = computed(() => props.torrent?.download_type === 'netdisk')
+// 分享体检结果：只读比对，不发起下载；空值表示尚未体检。
+const auditReport = ref<NetdiskShareAuditReport | null>(null)
+const auditLoading = ref(false)
 
 // 当前数据源：优先使用已随媒体或种子传入的完整身份，可在高级选项手动切换。
 const mediaSource = ref<MediaDataSource>(
@@ -307,6 +311,156 @@ async function previewShareEpisodes() {
   } finally {
     aiPreviewLoading.value = false
   }
+}
+
+// 把集号压缩成 E09-E12 这种区间文本，与后端 format_ranges 口径一致。
+function formatEpisodeRanges(numbers: number[]): string {
+  const sorted = [...new Set(numbers)].sort((a, b) => a - b)
+  if (!sorted.length) return ''
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const ranges: string[] = []
+  let start = sorted[0]
+  let end = sorted[0]
+  for (const value of sorted.slice(1)) {
+    if (value === end + 1) {
+      end = value
+      continue
+    }
+    ranges.push(start === end ? `E${pad(start)}` : `E${pad(start)}-E${pad(end)}`)
+    start = value
+    end = value
+  }
+  ranges.push(start === end ? `E${pad(start)}` : `E${pad(start)}-E${pad(end)}`)
+  return ranges.join('、')
+}
+
+// 体检目标季：多季分享只填当前季，避免把别的季的集号填进单季输入框。
+const auditSeason = computed(() => {
+  const value = Number(props.media?.season)
+  return Number.isFinite(value) && value > 0 ? value : 1
+})
+
+// 自动体检的身份：只在网盘分享、已知媒体、电视剧三者齐备时给出。
+const auditIdentity = computed(() => {
+  if (!isNetdiskTorrent.value) return null
+  const mediaTypeName = resolveDownloadMediaType(props.media?.type || props.torrent?.category)
+  if (mediaTypeName !== '电视剧') return null
+  const source = props.media?.media_source || props.torrent?.media_source
+  const mediaId = (props.media?.media_id || props.torrent?.media_id || '').trim()
+  if (!isMediaDataSource(source) || !mediaId) return null
+  return { media_source: source, media_id: mediaId, mtype: '电视剧' }
+})
+
+// 当前季的缺口；报告没有按季数据时退回跨季合并列表。
+const auditSeasonGap = computed(() => {
+  const media = auditReport.value?.media?.[0]
+  if (!media) return null
+  const gap = (media.season_gaps || []).find(item => item.season === auditSeason.value)
+  if (gap) return gap
+  if (media.seasons.length > 1) return null
+  return {
+    season: auditSeason.value,
+    missing_episodes: media.missing_episodes,
+    existing_episodes: media.existing_episodes,
+  }
+})
+
+// 体检主结论：只展示第一个媒体分组，多分组时补一个数量提示。
+const auditSummary = computed(() => {
+  const report = auditReport.value
+  if (!report || !report.media.length) return ''
+  const media = report.media[0]
+  const parts: string[] = []
+  if (!media.recognized) {
+    parts.push(t('dialog.addDownload.shareAuditUnrecognized'))
+  } else if (media.type === '电影') {
+    parts.push(media.title || t('dialog.addDownload.shareAuditUnrecognized'))
+  } else {
+    parts.push(media.title || t('dialog.addDownload.shareAuditUnrecognized'))
+    const gap = auditSeasonGap.value
+    const shareCount = media.seasons.find(item => item.season === auditSeason.value)?.episodes.length ?? 0
+    if (shareCount) {
+      parts.push(t('dialog.addDownload.shareAuditShareCount', { count: shareCount }))
+    }
+    if (gap?.existing_episodes.length) {
+      parts.push(t('dialog.addDownload.shareAuditExisting', { count: gap.existing_episodes.length }))
+    }
+    if (gap?.missing_episodes.length) {
+      parts.push(
+        t('dialog.addDownload.shareAuditMissing', { episodes: formatEpisodeRanges(gap.missing_episodes) }),
+      )
+    } else if (media.library_evidence === 'none') {
+      parts.push(t('dialog.addDownload.shareAuditUnconfirmed'))
+    } else {
+      parts.push(t('dialog.addDownload.shareAuditComplete'))
+    }
+  }
+  if (report.media.length > 1) {
+    parts.push(`+${report.media.length - 1}`)
+  }
+  return parts.join(' · ')
+})
+
+// 可直接填入集数框的缺失集文本；只取当前季，避免多季重号混填。
+const auditMissingSelection = computed(() => {
+  const gap = auditSeasonGap.value
+  if (!gap) return ''
+  return formatEpisodeRanges(gap.missing_episodes)
+})
+
+/**
+ * 请求分享体检，只展示结论，不发起下载。
+ *
+ * @param auto 是否由打开对话框自动触发；自动触发失败或为空时不弹错误提示。
+ */
+async function runShareAudit(auto = false) {
+  const enclosure = props.torrent?.enclosure?.trim()
+  if (!isNetdiskTorrent.value || !enclosure || auditLoading.value) return
+  if (auto && !auditIdentity.value) return
+
+  auditLoading.value = true
+  try {
+    const identity = auditIdentity.value
+    const explicitSeason = Number(props.media?.season)
+    auditReport.value = await auditNetdiskShare({
+      url: enclosure,
+      password: props.torrent?.share_password || '',
+      platform: props.torrent?.netdisk_platform,
+      media_source: identity?.media_source,
+      media_id: identity?.media_id,
+      mtype: identity?.mtype,
+      title: identity ? props.media?.title : undefined,
+      year: identity && props.media?.year ? String(props.media.year) : undefined,
+      season: Number.isFinite(explicitSeason) && explicitSeason > 0 ? explicitSeason : undefined,
+    })
+    if (!auditReport.value || !auditReport.value.media.length) {
+      if (!auto) $toast.warning(t('dialog.addDownload.shareAuditEmpty'))
+      return
+    }
+    // 只填空输入框，不覆盖用户已经手填的集数。
+    const selection = auditMissingSelection.value
+    if (selection && !episodeSelection.value.trim()) {
+      episodeSelection.value = selection
+    }
+  } catch {
+    auditReport.value = null
+    if (!auto) $toast.error(t('dialog.addDownload.shareAuditFailed'))
+  } finally {
+    auditLoading.value = false
+  }
+}
+
+// 打开对话框即按已知媒体体检，缺失集直接预填；没有媒体身份时保持手填。
+onMounted(() => {
+  if (auditIdentity.value) void runShareAudit(true)
+})
+
+// 只下缺失集：把缺失集回填到集数输入框，下载仍由用户确认后发起。
+function fillMissingEpisodes() {
+  const selection = auditMissingSelection.value
+  if (!selection) return
+  episodeSelection.value = selection
+  $toast.success(t('dialog.addDownload.aiPreviewFilled'))
 }
 
 // 添加下载
@@ -501,6 +655,42 @@ onMounted(() => {
             >
               {{ t('dialog.addDownload.aiPreview') }}
             </VBtn>
+            <VBtn
+              data-testid="netdisk-share-audit"
+              class="mt-1 ml-1"
+              color="secondary"
+              density="compact"
+              prepend-icon="mdi-stethoscope"
+              size="small"
+              variant="text"
+              :loading="auditLoading"
+              :disabled="!props.torrent?.enclosure"
+              @click="runShareAudit()"
+            >
+              {{ auditReport ? t('dialog.addDownload.shareAuditRerun') : t('dialog.addDownload.shareAudit') }}
+            </VBtn>
+            <VAlert
+              v-if="auditSummary"
+              data-testid="netdisk-share-audit-summary"
+              class="mt-2"
+              density="compact"
+              type="info"
+              variant="tonal"
+            >
+              {{ auditSummary }}
+              <VBtn
+                v-if="auditMissingSelection"
+                data-testid="netdisk-share-audit-fill"
+                class="ml-2"
+                color="primary"
+                density="compact"
+                size="small"
+                variant="flat"
+                @click="fillMissingEpisodes"
+              >
+                {{ t('dialog.addDownload.shareAuditFillMissing') }}
+              </VBtn>
+            </VAlert>
           </VCol>
         </VRow>
         <VRow class="px-5 mt-2">

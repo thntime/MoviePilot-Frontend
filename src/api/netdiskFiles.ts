@@ -129,6 +129,83 @@ export async function previewNetdiskShare(payload: NetdiskSharePreviewRequest): 
   }
 }
 
+/** 分享体检请求；只传分享定位信息，不带账号凭据。 */
+export interface NetdiskShareAuditRequest {
+  url: string
+  password?: string
+  platform?: string
+  account_id?: number
+  // 已知目标媒体时传来源与原生 ID，体检按该身份算缺集，避免文件名识别偏差。
+  media_source?: string
+  media_id?: string
+  mtype?: string
+  title?: string
+  year?: string
+  // 只比对这一季；缺省比对分享内全部季。
+  season?: number
+}
+
+/** 分享内某一季包含的集号。 */
+export interface NetdiskShareAuditSeason {
+  season: number
+  episodes: number[]
+}
+
+/** 单集与媒体库的比对状态。 */
+export interface NetdiskShareAuditEpisode {
+  season: number
+  episode: number
+  state: 'present' | 'missing' | 'share_absent' | 'unconfirmed'
+}
+
+/** 某一季与媒体库的缺口，供前端只填当前季。 */
+export interface NetdiskShareAuditSeasonGap {
+  season: number
+  missing_episodes: number[]
+  existing_episodes: number[]
+}
+
+/** 分享体检中一个媒体分组的结果。 */
+export interface NetdiskShareAuditMedia {
+  title: string
+  year: string
+  type: string
+  recognized: boolean
+  media_source: string | null
+  media_id: string | null
+  files: number
+  total_bytes: number
+  seasons: NetdiskShareAuditSeason[]
+  episodes: NetdiskShareAuditEpisode[]
+  missing_episodes: number[]
+  existing_episodes: number[]
+  season_gaps: NetdiskShareAuditSeasonGap[]
+  library_evidence: 'media_server' | 'none'
+  library_state: 'present' | 'absent' | 'unknown'
+  truncated: boolean
+}
+
+/** 分享体检报告。 */
+export interface NetdiskShareAuditReport {
+  share_title: string
+  platform: string
+  file_count: number
+  total_bytes: number
+  truncated: boolean
+  unrecognized_files: number
+  media: NetdiskShareAuditMedia[]
+}
+
+interface AuditPayload {
+  audit: NetdiskShareAuditReport | null
+}
+
+/** 体检分享：识别媒体、盘点内容并与媒体库比对缺口；只读，不发起下载。 */
+export async function auditNetdiskShare(payload: NetdiskShareAuditRequest): Promise<NetdiskShareAuditReport | null> {
+  const result = await api.post<AuditPayload, AuditPayload>('netdisk/share/audit', payload, { feedback: 'silent' })
+  return result?.audit ?? null
+}
+
 /** 批量移动文件到目标目录。 */
 export function moveNetdiskFiles(accountId: number, files: NetdiskFileItem[], targetId: string): Promise<unknown> {
   return api.post(`netdisk/files/${accountId}/move`, { files, target_id: targetId }, { feedback: 'silent' })
