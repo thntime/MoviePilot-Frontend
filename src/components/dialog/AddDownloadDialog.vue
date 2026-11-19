@@ -4,6 +4,7 @@ import api, { isApiBusinessFailure, isApiResponse } from '@/api'
 import { doneNProgress, startNProgress } from '@/api/nprogress'
 import { listDownloadDirectories } from '@/api/storage'
 import { auditNetdiskShare, previewNetdiskShare } from '@/api/netdiskFiles'
+import { formatEpisodeRanges } from '@/utils/netdisk'
 import type { NetdiskShareAuditReport } from '@/api/netdiskFiles'
 import type {
   DownloadDirectory,
@@ -311,27 +312,6 @@ async function previewShareEpisodes() {
   } finally {
     aiPreviewLoading.value = false
   }
-}
-
-// 把集号压缩成 E09-E12 这种区间文本，与后端 format_ranges 口径一致。
-function formatEpisodeRanges(numbers: number[]): string {
-  const sorted = [...new Set(numbers)].sort((a, b) => a - b)
-  if (!sorted.length) return ''
-  const pad = (value: number) => String(value).padStart(2, '0')
-  const ranges: string[] = []
-  let start = sorted[0]
-  let end = sorted[0]
-  for (const value of sorted.slice(1)) {
-    if (value === end + 1) {
-      end = value
-      continue
-    }
-    ranges.push(start === end ? `E${pad(start)}` : `E${pad(start)}-E${pad(end)}`)
-    start = value
-    end = value
-  }
-  ranges.push(start === end ? `E${pad(start)}` : `E${pad(start)}-E${pad(end)}`)
-  return ranges.join('、')
 }
 
 // 体检目标季：多季分享只填当前季，避免把别的季的集号填进单季输入框。

@@ -30,7 +30,13 @@ import {
 } from '@/utils/netdisk'
 
 // 国际化
-const { t } = useI18n()
+const { t } = useI18n({
+  messages: {
+    'zh-CN': { netdiskAudit: { open: '分享体检' } },
+    'zh-TW': { netdiskAudit: { open: '分享體檢' } },
+    'en-US': { netdiskAudit: { open: 'Share audit' } },
+  },
+})
 
 // 轻提示
 const $toast = useToast()
@@ -55,6 +61,9 @@ const props = defineProps({
 
 // 新增/编辑账号弹窗按需加载
 const NetdiskAccountDialog = defineAsyncComponent(() => import('@/components/dialog/NetdiskAccountDialog.vue'))
+const NetdiskShareAuditDialog = defineAsyncComponent(() => import('@/components/dialog/NetdiskShareAuditDialog.vue'))
+// 分享体检入口：独立弹窗，粘贴链接即可体检，不依赖资源卡片。
+const auditDialogOpen = ref(false)
 
 // 平台能力列表
 const platforms = ref<NetdiskPlatformInfo[]>([])
@@ -333,6 +342,14 @@ useSilentSettingRefresh(
           <template #append>
             <div class="d-flex gap-2">
               <VBtn
+                data-testid="netdisk-share-audit-open"
+                variant="tonal"
+                prepend-icon="mdi-stethoscope"
+                @click="auditDialogOpen = true"
+              >
+                {{ t('netdiskAudit.open') }}
+              </VBtn>
+              <VBtn
                 variant="tonal"
                 prepend-icon="mdi-check-circle-outline"
                 :loading="checking"
@@ -431,6 +448,7 @@ useSilentSettingRefresh(
       </VCard>
     </VCol>
   </VRow>
+  <NetdiskShareAuditDialog v-model="auditDialogOpen" />
 </template>
 
 <style lang="scss" scoped>
