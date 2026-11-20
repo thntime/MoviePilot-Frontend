@@ -203,6 +203,16 @@ const router = createRouter({
           },
         },
         {
+          path: '/content-audit',
+          component: () => import('../views/content-audit/ContentAuditView.vue'),
+          meta: {
+            keepAlive: true,
+            requiresAuth: true,
+            permission: 'manage',
+            feature: PERMISSION_FEATURE.MANAGE_HISTORY,
+          },
+        },
+        {
           path: '/history',
           component: () => import('../pages/reorganize/history.vue'),
           meta: {

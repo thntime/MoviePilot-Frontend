@@ -3209,3 +3209,35 @@ export interface SubscriptionActivityPage {
   items: SubscriptionActivityEvent[]
   next_cursor: string | null
 }
+
+// 待处理的内容校验记录
+export interface ContentVerifyItem {
+  id: string
+  src: string
+  storage: string
+  title: string
+  media_type: string
+  season: string
+  episodes: string
+  score: number
+  confidence: number
+  reason: string
+  hits: string[]
+  frames: string[]
+  file_count: number
+  total_size: number
+  median_duration: number
+  platform: string
+  share_code: string
+  download_hash: string
+  created_at: string
+  updated_at: string
+  decision: string
+}
+
+// 内容校验记录分页结果
+export interface ContentVerifyPage {
+  items: ContentVerifyItem[]
+  total: number
+  pending_size: number
+}

@@ -146,6 +146,16 @@ export function getNavMenus(t: Composer['t']): NavMenu[] {
       feature: PERMISSION_FEATURE.MANAGE_DOWNLOADING,
     },
     {
+      title: t('navItems.contentAudit'),
+      icon: 'mdi-shield-search-outline',
+      iconColor: 'warning',
+      to: '/content-audit',
+      header: t('menu.organize'),
+      admin: true,
+      permission: 'manage',
+      feature: PERMISSION_FEATURE.MANAGE_HISTORY,
+    },
+    {
       title: t('navItems.mediaOrganize'),
       icon: 'mdi-folder-play-outline',
       iconColor: 'warning',
