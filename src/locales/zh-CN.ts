@@ -2303,6 +2303,7 @@ export default {
       importing: '正在导入... ({progress}%)',
       importErrors: '导入过程中出现 {count} 个错误',
       cdFieldsRequired: '请填写站点名称、用户名和密码',
+      psAuthFieldsRequired: 'PS 站点使用账号认证时必须填写用户名和密码',
     },
     errors: {
       loadDownloader: '加载下载器设置失败',

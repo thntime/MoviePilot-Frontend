@@ -127,7 +127,7 @@ async function fetchSiteInfo() {
     if (siteForm.value.kind === 'cd') {
       authType.value = 'auth'
     } else if (siteForm.value.kind === 'ps') {
-      authType.value = 'api'
+      authType.value = siteForm.value.auth_type === 'auth' ? 'auth' : 'api'
     } else if (siteForm.value.auth_type === 'api') {
       authType.value = 'api'
     } else if (!siteForm.value.auth_type && hasApiCredential) {
@@ -150,8 +150,8 @@ async function fetchSiteInfo() {
 function handleKindChange(value: 'pt' | 'cd' | 'ps') {
   siteForm.value.kind = value
   if (value === 'cd' || value === 'ps') {
-    // CD 用账号认证，PS 用可选的 Bearer token，两者都不走网页 Cookie
-    authType.value = value === 'cd' ? 'auth' : 'api'
+    // CD 只走账号认证；PS 可用账号密码或 Bearer token，切换类型时保留已选方式
+    authType.value = value === 'cd' ? 'auth' : authType.value === 'auth' ? 'auth' : 'api'
     siteForm.value.rss = ''
     siteForm.value.cookie = ''
     siteForm.value.ua = ''
@@ -177,17 +177,18 @@ function handleKindChange(value: 'pt' | 'cd' | 'ps') {
   siteForm.value.auth_type = authType.value
 }
 
-// 生成提交数据：密码仅在填写时携带，CD 站点固定 AUTH 认证，PS 站点固定 API 认证
+// 生成提交数据：密码仅在填写时携带，CD 固定 AUTH 认证，PS 按所选方式提交账号或 token
 function buildSitePayload(): SiteForm {
   const payload: SiteForm = { ...siteForm.value }
   const isCd = payload.kind === 'cd'
   const isPs = payload.kind === 'ps'
+  const psAuth = isPs && authType.value === 'auth'
   payload.kind = isCd ? 'cd' : isPs ? 'ps' : 'pt'
-  payload.auth_type = isCd ? 'auth' : isPs ? 'api' : authType.value === 'api' ? 'api' : 'cookie'
+  payload.auth_type = isCd || psAuth ? 'auth' : isPs ? 'api' : authType.value === 'api' ? 'api' : 'cookie'
   payload.auth_refresh_interval = isCd ? Number(payload.auth_refresh_interval) || 300 : 300
-  payload.username = isCd ? payload.username?.trim() || null : null
+  payload.username = isCd || psAuth ? payload.username?.trim() || null : null
   if (isCd || isPs) {
-    // 网盘站点不使用 PT 专属字段；PS 保留 token 作为 Bearer 凭据
+    // 网盘站点不使用 PT 专属字段；PS 按认证方式保留 token 或账号密码
     payload.rss = ''
     payload.cookie = ''
     payload.ua = ''
@@ -196,14 +197,15 @@ function buildSitePayload(): SiteForm {
     payload.limit_interval = 0
     payload.limit_count = 0
     payload.limit_seconds = 0
-    if (isCd) {
+    if (isCd || psAuth) {
       payload.token = ''
       payload.apikey = ''
     } else {
       payload.apikey = ''
+      payload.username = null
     }
   }
-  if (!isCd || !payload.password) delete payload.password
+  if ((!isCd && !psAuth) || !payload.password) delete payload.password
   return payload
 }
 
@@ -212,6 +214,10 @@ async function addSite() {
   if (!siteForm.value?.url) return
   if (isCdSite.value && (!siteForm.value.name?.trim() || !siteForm.value.username?.trim() || !siteForm.value.password?.trim())) {
     $toast.warning(t('site.messages.cdFieldsRequired'))
+    return
+  }
+  if (isPsSite.value && authType.value === 'auth' && (!siteForm.value.username?.trim() || !siteForm.value.password?.trim())) {
+    $toast.warning(t('site.messages.psAuthFieldsRequired'))
     return
   }
   startNProgress()
@@ -231,6 +237,10 @@ async function addSite() {
 async function updateSiteInfo() {
   if (isCdSite.value && (!siteForm.value.name?.trim() || !siteForm.value.username?.trim())) {
     $toast.warning(t('site.messages.cdFieldsRequired'))
+    return
+  }
+  if (isPsSite.value && authType.value === 'auth' && !siteForm.value.username?.trim()) {
+    $toast.warning(t('site.messages.psAuthFieldsRequired'))
     return
   }
   startNProgress()
@@ -385,7 +395,7 @@ onMounted(async () => {
                 {{ t('site.authOptions.api') }}
               </div>
             </VTab>
-            <VTab value="auth" :disabled="!isCdSite" selected-class="v-tab--selected">
+            <VTab value="auth" :disabled="!isNetdiskSite" selected-class="v-tab--selected">
               <div>
                 <VIcon size="20" start icon="mdi-shield-account" />
                 {{ t('site.authOptions.auth') }}

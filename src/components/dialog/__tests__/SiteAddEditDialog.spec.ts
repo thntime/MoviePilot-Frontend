@@ -19,10 +19,11 @@ const mocks = vi.hoisted(() => ({
   start: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
+  toastWarning: vi.fn(),
 }))
 
 vi.mock('vue-toastification', () => ({
-  useToast: () => ({ error: mocks.toastError, success: mocks.toastSuccess }),
+  useToast: () => ({ error: mocks.toastError, success: mocks.toastSuccess, warning: mocks.toastWarning }),
 }))
 
 vi.mock('@/api/nprogress', () => ({
@@ -189,6 +190,49 @@ describe('SiteAddEditDialog', () => {
     expect(events.save).not.toHaveBeenCalled()
     expect(mocks.done).toHaveBeenCalledOnce()
     if (status === 500) expect(consoleError).toHaveBeenCalledOnce()
+  })
+
+  it('creates a PS site with account authentication', async () => {
+    const saved = vi.fn()
+    server.use(addSiteHandler({ success: true }, 200, saved))
+    const user = userEvent.setup()
+    const { events } = await renderDialog('add')
+
+    await user.type(screen.getByLabelText('站点地址'), 'http://pansou.example:3300/')
+    await user.click(screen.getByLabelText('站点类型'))
+    await user.click(await screen.findByRole('option', { name: 'PS' }))
+    await user.click(screen.getByRole('tab', { name: 'AUTH' }))
+    await fireEvent.update(screen.getByLabelText('用户名'), 'admin')
+    await fireEvent.update(screen.getByLabelText('密码'), 'secret')
+    await user.click(screen.getByRole('button', { name: '新增站点' }))
+
+    await waitFor(() => expect(saved).toHaveBeenCalledOnce())
+    expect(saved.mock.calls[0][0]).toMatchObject({
+      auth_type: 'auth',
+      kind: 'ps',
+      password: 'secret',
+      token: '',
+      url: 'http://pansou.example:3300/',
+      username: 'admin',
+    })
+    expect(events.save).toHaveBeenCalledOnce()
+  })
+
+  it('blocks a PS account site without a password', async () => {
+    const saved = vi.fn()
+    server.use(addSiteHandler({ success: true }, 200, saved))
+    const user = userEvent.setup()
+    await renderDialog('add')
+
+    await user.type(screen.getByLabelText('站点地址'), 'http://pansou.example:3300/')
+    await user.click(screen.getByLabelText('站点类型'))
+    await user.click(await screen.findByRole('option', { name: 'PS' }))
+    await user.click(screen.getByRole('tab', { name: 'AUTH' }))
+    await fireEvent.update(screen.getByLabelText('用户名'), 'admin')
+    await user.click(screen.getByRole('button', { name: '新增站点' }))
+
+    expect(saved).not.toHaveBeenCalled()
+    expect(mocks.toastWarning).toHaveBeenCalledWith('PS 站点使用账号认证时必须填写用户名和密码')
   })
 
   it('emits close from the dialog close button', async () => {

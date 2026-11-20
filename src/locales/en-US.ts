@@ -2336,6 +2336,7 @@ export default {
       importing: 'Importing... ({progress}%)',
       importErrors: 'Import encountered {count} errors',
       cdFieldsRequired: 'Please fill in the site name, username and password',
+      psAuthFieldsRequired: 'PS sites using account authentication require a username and password',
     },
     errors: {
       loadDownloader: 'Failed to load downloader settings',

@@ -2294,6 +2294,7 @@ export default {
       importing: '正在導入... ({progress}%)',
       importErrors: '導入過程中出現 {count} 個錯誤',
       cdFieldsRequired: '請填寫站點名稱、用戶名和密碼',
+      psAuthFieldsRequired: 'PS 站點使用帳號認證時必須填寫用戶名和密碼',
     },
     errors: {
       loadDownloader: '加載下載器設置失敗',
