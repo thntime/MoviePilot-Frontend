@@ -3166,6 +3166,12 @@ export interface SubscriptionActivityResource {
   decision: string
   subscription_download?: SubscriptionDownloadSource | null
   reason?: string | null
+  /** CD/PS 站点资源的网盘平台标识，PT 资源为空。 */
+  netdisk_platform?: string
+  /** 网盘分享码，界面据此拼出可点击的分享地址。 */
+  share_code?: string
+  /** 后端保留的网盘分享原始地址，缺失分享码时仍可直接打开。 */
+  share_url?: string
 }
 
 /** 单个订阅业务活动及该轮执行时冻结的结构化详情。 */

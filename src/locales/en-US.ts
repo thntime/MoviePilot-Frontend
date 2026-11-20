@@ -186,6 +186,8 @@ export default {
     'resources': 'Related resources ({count})',
     'resourceName': 'Resource',
     'resourceSite': 'Source',
+    'netdiskLink': 'Netdisk link',
+    'openNetdiskLink': 'Open link',
     'decision': 'Decision / reason not selected',
     'unknownSite': 'Unknown source',
     'noRelatedResources': 'No usable resources related to this subscription in this round',

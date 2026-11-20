@@ -176,6 +176,8 @@ export default {
     'resources': '相关资源（{count} 项）',
     'resourceName': '资源名称',
     'resourceSite': '来源',
+    'netdiskLink': '网盘链接',
+    'openNetdiskLink': '打开链接',
     'decision': '处理结果 / 未选择原因',
     'unknownSite': '未知来源',
     'noRelatedResources': '本轮没有与此订阅相关的可用资源',

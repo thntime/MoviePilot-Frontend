@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import api from '@/api'
 import { subscriptionDownloadKey } from '@/utils/subscriptionDownload'
-import type { Subscribe, SubscrbieInfo, SubscriptionActivityEvent, SubscriptionActivityPage } from '@/api/types'
+import { buildNetdiskShareUrl, getNetdiskPlatformName } from '@/utils/netdisk'
+import type {
+  Subscribe,
+  SubscrbieInfo,
+  SubscriptionActivityEvent,
+  SubscriptionActivityPage,
+  SubscriptionActivityResource,
+} from '@/api/types'
 import { formatSeasonLabel } from '@/@core/utils/season'
 import { getDisplayImageUrl } from '@/utils/imageUtils'
 import { useGlobalSettingsStore } from '@/stores'
@@ -157,6 +164,20 @@ function eventRevision(event: SubscriptionActivityEvent) {
 /** 判断是否已有可读详情，后台更新期间保持内容高度和用户滚动位置。 */
 function hasDetails(event: SubscriptionActivityEvent) {
   return event.details_loaded !== false || event.details.resources !== undefined || event.details.rules !== undefined
+}
+
+/** 网盘分享地址：优先用后端保留的原始链接，缺失时按平台前缀拼出分享地址。 */
+function netdiskShareHref(resource: SubscriptionActivityResource) {
+  const explicit = String(resource.share_url || '').trim()
+  if (explicit) return explicit
+  return buildNetdiskShareUrl(resource.netdisk_platform, resource.share_code)
+}
+
+/** 网盘链接文案：有分享码显示「平台：分享码」，只有链接时提示打开。 */
+function netdiskShareText(resource: SubscriptionActivityResource) {
+  const code = String(resource.share_code || '').trim()
+  if (!code) return t('subscriptionActivity.openNetdiskLink')
+  return `${getNetdiskPlatformName(t, resource.netdisk_platform)}：${code}`
 }
 
 /** 复用未改变的详情；有变化时保留旧内容，等按需请求完成后原位替换。 */
@@ -617,6 +638,7 @@ onBeforeUnmount(() => {
                       <tr>
                         <th>{{ t('subscriptionActivity.resourceName') }}</th>
                         <th>{{ t('subscriptionActivity.resourceSite') }}</th>
+                        <th>{{ t('subscriptionActivity.netdiskLink') }}</th>
                         <th>{{ t('subscriptionActivity.decision') }}</th>
                         <th>{{ t('subscriptionActivity.submissionType') }}</th>
                       </tr>
@@ -625,6 +647,18 @@ onBeforeUnmount(() => {
                       <tr v-for="(resource, index) in event.details.resources || []" :key="index">
                         <td>{{ resource.title }}</td>
                         <td>{{ resource.site || t('subscriptionActivity.unknownSite') }}</td>
+                        <td>
+                          <a
+                            v-if="netdiskShareHref(resource)"
+                            class="activity-netdisk-link"
+                            :href="netdiskShareHref(resource)"
+                            target="_blank"
+                            rel="noopener"
+                            @click.stop
+                            >{{ netdiskShareText(resource) }}</a
+                          >
+                          <template v-else>—</template>
+                        </td>
                         <td>
                           <VIcon
                             :icon="
@@ -650,7 +684,7 @@ onBeforeUnmount(() => {
                         </td>
                       </tr>
                       <tr v-if="!event.details.resources?.length">
-                        <td colspan="4" class="activity-muted">{{ t('subscriptionActivity.noRelatedResources') }}</td>
+                        <td colspan="5" class="activity-muted">{{ t('subscriptionActivity.noRelatedResources') }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1105,11 +1139,23 @@ onBeforeUnmount(() => {
   border-inline-start: 1px solid var(--activity-border);
 }
 .activity-table td:first-child {
-  inline-size: 43%;
+  inline-size: 38%;
   overflow-wrap: anywhere;
 }
 .activity-table td:nth-child(2) {
-  inline-size: 17%;
+  inline-size: 15%;
+}
+.activity-table td:nth-child(3) {
+  inline-size: 16%;
+  overflow-wrap: anywhere;
+}
+.activity-netdisk-link {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: none;
+}
+.activity-netdisk-link:hover,
+.activity-netdisk-link:focus-visible {
+  text-decoration: underline;
 }
 .activity-table tr:last-child td {
   border-block-end: none;

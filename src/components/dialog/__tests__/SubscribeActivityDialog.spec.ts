@@ -366,3 +366,52 @@ describe('subscription download source', () => {
     unmount()
   })
 })
+
+describe('netdisk share link', () => {
+  it('links CD resources to their netdisk share', async () => {
+    server.use(
+      http.get(activityUrl, () =>
+        apiJson({
+          items: [
+            refreshEvent({
+              status: 'empty',
+              counts: { sites: 2, discovered: 69, related: 1, qualified: 0, submitted: 0 },
+              details: {
+                resources: [
+                  {
+                    title: '#完美世界(2024)4K S01E289 晚上更 在线看',
+                    site: 'CloudSaver',
+                    decision: 'rejected',
+                    reason: '分享内没有可解析的目标季 S1 集数',
+                    netdisk_platform: 'quark',
+                    share_code: 'd30c5af5d776',
+                    share_url: 'https://pan.quark.cn/s/d30c5af5d776',
+                  },
+                ],
+              },
+            }),
+          ],
+          next_cursor: null,
+        }),
+      ),
+    )
+    const { unmount } = await renderActivity()
+    expect(await screen.findByText('网盘链接')).toBeInTheDocument()
+    const link = await screen.findByRole('link', { name: '夸克：d30c5af5d776' })
+    expect(link).toHaveAttribute('href', 'https://pan.quark.cn/s/d30c5af5d776')
+    expect(link).toHaveAttribute('target', '_blank')
+    unmount()
+  })
+
+  it('keeps PT resources without a netdisk link', async () => {
+    server.use(http.get(activityUrl, () => apiJson({ items: [refreshEvent()], next_cursor: null })))
+    const { unmount } = await renderActivity()
+    expect(await screen.findByText('分辨率 720p 不符合 2160p 条件')).toBeInTheDocument()
+    const cells = Array.from(document.querySelectorAll('.activity-table tbody td:nth-child(3)')).map(cell =>
+      (cell.textContent || '').trim(),
+    )
+    expect(cells).toEqual(['—'])
+    expect(document.querySelector('.activity-table a[href*="pan.quark.cn"]')).toBeNull()
+    unmount()
+  })
+})
