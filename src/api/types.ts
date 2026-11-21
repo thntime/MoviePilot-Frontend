@@ -3241,4 +3241,5 @@ export interface ContentVerifyPage {
   total: number
   pending_size: number
   counts: Record<string, number>
+  score_total: number
 }

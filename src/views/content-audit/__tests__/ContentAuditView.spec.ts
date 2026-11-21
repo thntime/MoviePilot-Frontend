@@ -14,6 +14,7 @@ interface AuditItem {
   title: string
   decision: string
   total_size: number
+  created_at: string
   [key: string]: unknown
 }
 
@@ -59,18 +60,19 @@ function countByDecision(items: AuditItem[]) {
   return counts
 }
 
-function listResponse(items: AuditItem[]) {
+function listResponse(items: AuditItem[], total?: number) {
   const pending = items.filter(item => (item.decision || 'reject') === 'reject')
   return {
     items,
-    total: items.length,
+    total: total ?? items.length,
     pending_size: pending.reduce((sum: number, item) => sum + (item.total_size || 0), 0),
     counts: countByDecision(items),
+    score_total: 11,
   }
 }
 
 describe('ContentAuditView', () => {
-  it('renders pending records with verdict and evidence', async () => {
+  it('renders pending records with verdict, time and score total from api', async () => {
     server.use(
       http.get(new URL('history/verify', API_BASE_URL).href, () => apiJson(listResponse([auditItem()]))),
     )
@@ -79,8 +81,10 @@ describe('ContentAuditView', () => {
 
     await waitFor(() => expect(screen.getByText('斗破苍穹')).toBeInTheDocument())
     expect(screen.getByText('文件名是另一部作品')).toBeInTheDocument()
-    expect(screen.getByText('3 / 12')).toBeInTheDocument()
+    expect(screen.getByTestId('audit-score-rec1')).toHaveTextContent('3 / 11')
+    expect(screen.getByTestId('audit-time-rec1')).toHaveTextContent('2026-11-21 00:00:00')
     expect(screen.getByText('待处理 1 条')).toBeInTheDocument()
+    expect(screen.getByTestId('audit-total')).toHaveTextContent('共 1 条')
     expect(screen.getByTestId('audit-verdict-rec1')).toHaveTextContent('待处理')
   })
 
@@ -114,6 +118,49 @@ describe('ContentAuditView', () => {
     await userEvent.click(screen.getByTestId('audit-filter-pass'))
 
     await waitFor(() => expect(requests.some(url => url.includes('status=pass'))).toBe(true))
+  })
+
+  it('requests the next page with the page parameter', async () => {
+    const requests: string[] = []
+    const rows = Array.from({ length: 25 }, (_, index) =>
+      auditItem({ id: `rec${index}`, title: `资源 ${index}` }),
+    )
+    server.use(
+      http.get(new URL('history/verify', API_BASE_URL).href, ({ request }) => {
+        requests.push(request.url)
+        return apiJson(listResponse(rows, 60))
+      }),
+    )
+
+    renderWithProviders(ContentAuditView)
+
+    await waitFor(() => expect(screen.getByText('资源 0')).toBeInTheDocument())
+    const pager = document.querySelector('.v-pagination') as HTMLElement | null
+    expect(pager).not.toBeNull()
+    const pageButton = Array.from(pager?.querySelectorAll('button') ?? []).find(
+      button => button.textContent?.trim() === '2',
+    )
+    expect(pageButton).toBeTruthy()
+    await userEvent.click(pageButton as HTMLElement)
+
+    await waitFor(() => expect(requests.some(url => url.includes('page=2'))).toBe(true))
+  })
+
+  it('requests a new page size when it changes', async () => {
+    const requests: string[] = []
+    server.use(
+      http.get(new URL('history/verify', API_BASE_URL).href, ({ request }) => {
+        requests.push(request.url)
+        return apiJson(listResponse([auditItem()]))
+      }),
+    )
+
+    renderWithProviders(ContentAuditView)
+
+    await waitFor(() => expect(screen.getByText('斗破苍穹')).toBeInTheDocument())
+    await userEvent.click(screen.getByTestId('audit-size-50'))
+
+    await waitFor(() => expect(requests.some(url => url.includes('count=50'))).toBe(true))
   })
 
   it('accepts a record and removes it from the list', async () => {
@@ -170,5 +217,18 @@ describe('ContentAuditView', () => {
     renderWithProviders(ContentAuditView)
 
     await waitFor(() => expect(screen.getByText('没有待处理的内容')).toBeInTheDocument())
+  })
+
+  it('shows a status specific empty state when a filter has no records', async () => {
+    server.use(
+      http.get(new URL('history/verify', API_BASE_URL).href, () => apiJson(listResponse([]))),
+    )
+
+    renderWithProviders(ContentAuditView)
+
+    await waitFor(() => expect(screen.getByTestId('audit-filter-pass')).toBeInTheDocument())
+    await userEvent.click(screen.getByTestId('audit-filter-pass'))
+
+    await waitFor(() => expect(screen.getByText('该状态下没有记录')).toBeInTheDocument())
   })
 })

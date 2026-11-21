@@ -7,7 +7,10 @@ import { useI18n } from 'vue-i18n'
 // 国际化
 const { t } = useI18n()
 
-// 待处理记录
+// 每页条数可选项
+const PAGE_SIZES = [25, 50, 100]
+
+// 当前页记录
 const items = ref<ContentVerifyItem[]>([])
 // 当前筛选条件下的记录总数
 const total = ref(0)
@@ -15,8 +18,14 @@ const total = ref(0)
 const pendingSize = ref(0)
 // 各状态记录数
 const counts = ref<Record<string, number>>({})
+// 证据得分满分，由接口给出
+const scoreTotal = ref(0)
 // 状态筛选，all 表示全部
 const status = ref('all')
+// 当前页码
+const page = ref(1)
+// 每页条数
+const pageSize = ref(PAGE_SIZES[0])
 // 正在处理的记录标识
 const busyId = ref('')
 // 是否已加载过
@@ -36,6 +45,11 @@ const statusOptions = computed(() => {
   ]
 })
 
+// 总页数
+const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+// 是否处在某个状态筛选下
+const filtered = computed(() => status.value !== 'all')
+
 // 结论标签与配色
 const verdictMeta: Record<string, { labelKey: string; color: string }> = {
   reject: { labelKey: 'contentAudit.statusReject', color: 'warning' },
@@ -54,12 +68,6 @@ function verdictLabel(decision: string): string {
 // 结论配色
 function verdictColor(decision: string): string {
   return (verdictMeta[decision] || verdictMeta.reject).color
-}
-
-// 切换状态筛选并重新读取
-function selectStatus(value: unknown) {
-  status.value = String(value || 'all')
-  void fetchData()
 }
 
 // 字节转可读大小
@@ -93,14 +101,19 @@ function formatConfidence(value: number): string {
   return `${Math.round(ratio * 100)}%`
 }
 
-// 读取内容校验记录
+// 按当前筛选与分页读取记录
 async function fetchData() {
   try {
-    const data = await contentVerifyList({ page: 1, count: 200, status: status.value })
+    const data = await contentVerifyList({
+      page: page.value,
+      count: pageSize.value,
+      status: status.value,
+    })
     items.value = data?.items || []
     total.value = data?.total || 0
     pendingSize.value = data?.pending_size || 0
     counts.value = data?.counts || {}
+    scoreTotal.value = data?.score_total || 0
   } catch (error) {
     console.error(error)
   } finally {
@@ -111,6 +124,26 @@ async function fetchData() {
 // 处理完一条记录后按当前筛选重读，保证计数与列表一致
 async function refreshAfterAction() {
   await fetchData()
+}
+
+// 切换状态筛选：回到第一页再读
+function selectStatus(value: unknown) {
+  status.value = String(value || 'all')
+  page.value = 1
+  void fetchData()
+}
+
+// 翻页
+function changePage(value: number) {
+  page.value = Math.max(1, Number(value) || 1)
+  void fetchData()
+}
+
+// 切换每页条数：回到第一页再读
+function changePageSize(value: number) {
+  pageSize.value = Number(value) || PAGE_SIZES[0]
+  page.value = 1
+  void fetchData()
 }
 
 // 人工放行：按原路径强制整理
@@ -162,6 +195,9 @@ onMounted(fetchData)
       <VChip color="info" variant="tonal" size="small">
         {{ t('contentAudit.pendingSize', { size: formatSize(pendingSize) }) }}
       </VChip>
+      <VChip variant="tonal" size="small" data-testid="audit-total">
+        {{ t('contentAudit.totalCount', { count: total }) }}
+      </VChip>
     </div>
 
     <VChipGroup
@@ -183,87 +219,124 @@ onMounted(fetchData)
       </VChip>
     </VChipGroup>
 
-    <VTable v-if="items.length > 0" class="audit-table" density="compact">
-      <thead>
-        <tr>
-          <th>{{ t('contentAudit.media') }}</th>
-          <th>{{ t('contentAudit.conclusion') }}</th>
-          <th>{{ t('contentAudit.verdict') }}</th>
-          <th>{{ t('contentAudit.evidence') }}</th>
-          <th>{{ t('contentAudit.files') }}</th>
-          <th>{{ t('contentAudit.path') }}</th>
-          <th>{{ t('contentAudit.actions') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="item in items" :key="item.id" :data-testid="`audit-row-${item.id}`">
-          <td>
-            <div class="media-title">{{ item.title || '-' }}</div>
-            <div class="media-meta">
-              {{ item.media_type || '-' }}
-              <span v-if="item.season"> · S{{ item.season }}</span>
-              <span v-if="item.episodes"> · {{ item.episodes }}</span>
-            </div>
-          </td>
-          <td>
-            <VChip
-              size="small"
-              variant="tonal"
-              :color="verdictColor(item.decision)"
-              :data-testid="`audit-verdict-${item.id}`"
-            >
-              {{ verdictLabel(item.decision) }}
-            </VChip>
-          </td>
-          <td>
-            <div class="verdict-reason">{{ item.reason || '-' }}</div>
-            <div class="media-meta">{{ t('contentAudit.confidence') }}{{ formatConfidence(item.confidence) }}</div>
-          </td>
-          <td>
-            <div>{{ item.score }} / 12</div>
-            <div class="media-meta">{{ item.hits?.length ? item.hits.join('、') : t('contentAudit.noHit') }}</div>
-          </td>
-          <td>
-            <div>{{ t('contentAudit.fileCount', { count: item.file_count }) }}</div>
-            <div class="media-meta">
-              {{ formatSize(item.total_size) }} · {{ formatDuration(item.median_duration) }}
-            </div>
-          </td>
-          <td class="path-cell" :title="item.src">{{ item.src }}</td>
-          <td>
-            <div v-if="item.decision === 'reject'" class="audit-actions">
-              <VBtn
+    <div v-if="items.length > 0" class="audit-table-wrap">
+      <VTable class="audit-table" density="compact">
+        <thead>
+          <tr>
+            <th class="col-time">{{ t('contentAudit.time') }}</th>
+            <th>{{ t('contentAudit.media') }}</th>
+            <th>{{ t('contentAudit.conclusion') }}</th>
+            <th>{{ t('contentAudit.verdict') }}</th>
+            <th>{{ t('contentAudit.evidence') }}</th>
+            <th>{{ t('contentAudit.files') }}</th>
+            <th>{{ t('contentAudit.path') }}</th>
+            <th>{{ t('contentAudit.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in items" :key="item.id" :data-testid="`audit-row-${item.id}`">
+            <td class="col-time" :data-testid="`audit-time-${item.id}`">
+              {{ item.created_at || '-' }}
+            </td>
+            <td>
+              <div class="media-title">{{ item.title || '-' }}</div>
+              <div class="media-meta">
+                {{ item.media_type || '-' }}
+                <span v-if="item.season"> · S{{ item.season }}</span>
+                <span v-if="item.episodes"> · {{ item.episodes }}</span>
+              </div>
+            </td>
+            <td>
+              <VChip
                 size="small"
-                variant="text"
-                color="primary"
-                :loading="busyId === item.id"
-                :aria-label="t('contentAudit.accept')"
-                @click="handleAccept(item)"
+                variant="tonal"
+                :color="verdictColor(item.decision)"
+                :data-testid="`audit-verdict-${item.id}`"
               >
-                {{ t('contentAudit.accept') }}
-              </VBtn>
-              <VBtn
-                size="small"
-                variant="text"
-                color="error"
-                :loading="busyId === item.id"
-                :aria-label="t('contentAudit.delete')"
-                @click="handleDelete(item)"
-              >
-                {{ t('contentAudit.delete') }}
-              </VBtn>
-            </div>
-            <span v-else class="media-meta">{{ t('contentAudit.noAction') }}</span>
-          </td>
-        </tr>
-      </tbody>
-    </VTable>
+                {{ verdictLabel(item.decision) }}
+              </VChip>
+            </td>
+            <td>
+              <div class="verdict-reason">{{ item.reason || '-' }}</div>
+              <div class="media-meta">
+                {{ t('contentAudit.confidence') }}{{ formatConfidence(item.confidence) }}
+              </div>
+            </td>
+            <td>
+              <div :data-testid="`audit-score-${item.id}`">{{ item.score }} / {{ scoreTotal }}</div>
+              <div class="media-meta">
+                {{ item.hits?.length ? item.hits.join('、') : t('contentAudit.noHit') }}
+              </div>
+            </td>
+            <td>
+              <div>{{ t('contentAudit.fileCount', { count: item.file_count }) }}</div>
+              <div class="media-meta">
+                {{ formatSize(item.total_size) }} · {{ formatDuration(item.median_duration) }}
+              </div>
+            </td>
+            <td class="path-cell" :title="item.src">{{ item.src }}</td>
+            <td>
+              <div v-if="item.decision === 'reject'" class="audit-actions">
+                <VBtn
+                  size="small"
+                  variant="text"
+                  color="primary"
+                  :loading="busyId === item.id"
+                  :aria-label="t('contentAudit.accept')"
+                  @click="handleAccept(item)"
+                >
+                  {{ t('contentAudit.accept') }}
+                </VBtn>
+                <VBtn
+                  size="small"
+                  variant="text"
+                  color="error"
+                  :loading="busyId === item.id"
+                  :aria-label="t('contentAudit.delete')"
+                  @click="handleDelete(item)"
+                >
+                  {{ t('contentAudit.delete') }}
+                </VBtn>
+              </div>
+              <span v-else class="media-meta">{{ t('contentAudit.noAction') }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </VTable>
+    </div>
+
+    <div v-if="items.length > 0" class="audit-footer">
+      <VPagination
+        :model-value="page"
+        :length="pageCount"
+        :total-visible="5"
+        density="compact"
+        :aria-label="t('contentAudit.pagination')"
+        @update:model-value="changePage"
+      />
+      <div class="audit-page-size">
+        <span class="media-meta">{{ t('contentAudit.perPage') }}</span>
+        <VChip
+          v-for="size in PAGE_SIZES"
+          :key="size"
+          size="small"
+          variant="tonal"
+          :color="size === pageSize ? 'primary' : undefined"
+          :data-testid="`audit-size-${size}`"
+          @click="changePageSize(size)"
+        >
+          {{ size }}
+        </VChip>
+      </div>
+    </div>
 
     <NoDataFound
       v-else-if="loaded"
       error-code="200"
-      :error-title="t('contentAudit.emptyTitle')"
-      :error-description="t('contentAudit.emptyDescription')"
+      :error-title="filtered ? t('contentAudit.emptyFilteredTitle') : t('contentAudit.emptyTitle')"
+      :error-description="
+        filtered ? t('contentAudit.emptyFilteredDescription') : t('contentAudit.emptyDescription')
+      "
     />
   </div>
 </template>
@@ -285,8 +358,41 @@ onMounted(fetchData)
   gap: 4px;
 }
 
+.audit-table-wrap {
+  width: 100%;
+  overflow: auto;
+  max-height: 68vh;
+}
+
 .audit-table {
   width: 100%;
+  min-width: 960px;
+}
+
+.audit-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgb(var(--v-theme-surface));
+  white-space: nowrap;
+}
+
+.audit-table tbody tr:hover {
+  background: rgba(var(--v-theme-on-surface), 0.04);
+}
+
+.audit-table td,
+.audit-table th {
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.col-time {
+  width: 160px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  opacity: 0.8;
 }
 
 .media-title {
@@ -314,5 +420,19 @@ onMounted(fetchData)
 .audit-actions {
   display: flex;
   gap: 4px;
+}
+
+.audit-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.audit-page-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 </style>
