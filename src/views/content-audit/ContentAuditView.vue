@@ -47,6 +47,10 @@ const statusOptions = computed(() => {
 
 // 总页数
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+// 当前页第一条记录的序号
+const pageStart = computed(() => (total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1))
+// 当前页最后一条记录的序号
+const pageEnd = computed(() => Math.min(page.value * pageSize.value, total.value))
 // 是否处在某个状态筛选下
 const filtered = computed(() => status.value !== 'all')
 
@@ -219,116 +223,120 @@ onMounted(fetchData)
       </VChip>
     </VChipGroup>
 
-    <div v-if="items.length > 0" class="audit-table-wrap">
-      <VTable class="audit-table" density="compact">
-        <thead>
-          <tr>
-            <th class="col-time">{{ t('contentAudit.time') }}</th>
-            <th>{{ t('contentAudit.media') }}</th>
-            <th>{{ t('contentAudit.conclusion') }}</th>
-            <th>{{ t('contentAudit.verdict') }}</th>
-            <th>{{ t('contentAudit.evidence') }}</th>
-            <th>{{ t('contentAudit.files') }}</th>
-            <th>{{ t('contentAudit.path') }}</th>
-            <th>{{ t('contentAudit.actions') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in items" :key="item.id" :data-testid="`audit-row-${item.id}`">
-            <td class="col-time" :data-testid="`audit-time-${item.id}`">
-              {{ item.created_at || '-' }}
-            </td>
-            <td>
-              <div class="media-title">{{ item.title || '-' }}</div>
-              <div class="media-meta">
-                {{ item.media_type || '-' }}
-                <span v-if="item.season"> · S{{ item.season }}</span>
-                <span v-if="item.episodes"> · {{ item.episodes }}</span>
-              </div>
-            </td>
-            <td>
-              <VChip
-                size="small"
-                variant="tonal"
-                :color="verdictColor(item.decision)"
-                :data-testid="`audit-verdict-${item.id}`"
-              >
-                {{ verdictLabel(item.decision) }}
-              </VChip>
-            </td>
-            <td>
-              <div class="verdict-reason">{{ item.reason || '-' }}</div>
-              <div class="media-meta">
-                {{ t('contentAudit.confidence') }}{{ formatConfidence(item.confidence) }}
-              </div>
-            </td>
-            <td>
-              <div :data-testid="`audit-score-${item.id}`">{{ item.score }} / {{ scoreTotal }}</div>
-              <div class="media-meta">
-                {{ item.hits?.length ? item.hits.join('、') : t('contentAudit.noHit') }}
-              </div>
-            </td>
-            <td>
-              <div>{{ t('contentAudit.fileCount', { count: item.file_count }) }}</div>
-              <div class="media-meta">
-                {{ formatSize(item.total_size) }} · {{ formatDuration(item.median_duration) }}
-              </div>
-            </td>
-            <td class="path-cell" :title="item.src">{{ item.src }}</td>
-            <td>
-              <div v-if="item.decision === 'reject'" class="audit-actions">
-                <VBtn
+    <VCard v-if="items.length > 0" class="audit-table-card">
+      <div class="audit-table-wrap">
+        <VTable class="audit-table">
+          <thead>
+            <tr>
+              <th class="col-time">{{ t('contentAudit.time') }}</th>
+              <th>{{ t('contentAudit.media') }}</th>
+              <th>{{ t('contentAudit.conclusion') }}</th>
+              <th>{{ t('contentAudit.verdict') }}</th>
+              <th>{{ t('contentAudit.evidence') }}</th>
+              <th>{{ t('contentAudit.files') }}</th>
+              <th>{{ t('contentAudit.path') }}</th>
+              <th>{{ t('contentAudit.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in items" :key="item.id" :data-testid="`audit-row-${item.id}`">
+              <td class="col-time" :data-testid="`audit-time-${item.id}`">
+                {{ item.created_at || '-' }}
+              </td>
+              <td>
+                <div class="media-title">{{ item.title || '-' }}</div>
+                <div class="media-meta">
+                  {{ item.media_type || '-' }}
+                  <span v-if="item.season"> · S{{ item.season }}</span>
+                  <span v-if="item.episodes"> · {{ item.episodes }}</span>
+                </div>
+              </td>
+              <td>
+                <VChip
                   size="small"
-                  variant="text"
-                  color="primary"
-                  :loading="busyId === item.id"
-                  :aria-label="t('contentAudit.accept')"
-                  @click="handleAccept(item)"
+                  variant="tonal"
+                  :color="verdictColor(item.decision)"
+                  :data-testid="`audit-verdict-${item.id}`"
                 >
-                  {{ t('contentAudit.accept') }}
-                </VBtn>
-                <VBtn
-                  size="small"
-                  variant="text"
-                  color="error"
-                  :loading="busyId === item.id"
-                  :aria-label="t('contentAudit.delete')"
-                  @click="handleDelete(item)"
-                >
-                  {{ t('contentAudit.delete') }}
-                </VBtn>
-              </div>
-              <span v-else class="media-meta">{{ t('contentAudit.noAction') }}</span>
-            </td>
-          </tr>
-        </tbody>
-      </VTable>
-    </div>
+                  {{ verdictLabel(item.decision) }}
+                </VChip>
+              </td>
+              <td>
+                <div class="verdict-reason" :title="item.reason">{{ item.reason || '-' }}</div>
+                <div class="media-meta">
+                  {{ t('contentAudit.confidence') }}{{ formatConfidence(item.confidence) }}
+                </div>
+              </td>
+              <td>
+                <div :data-testid="`audit-score-${item.id}`">{{ item.score }} / {{ scoreTotal }}</div>
+                <div class="media-meta">
+                  {{ item.hits?.length ? item.hits.join('、') : t('contentAudit.noHit') }}
+                </div>
+              </td>
+              <td>
+                <div>{{ t('contentAudit.fileCount', { count: item.file_count }) }}</div>
+                <div class="media-meta">
+                  {{ formatSize(item.total_size) }} · {{ formatDuration(item.median_duration) }}
+                </div>
+              </td>
+              <td class="path-cell" :title="item.src">{{ item.src }}</td>
+              <td>
+                <div v-if="item.decision === 'reject'" class="audit-actions">
+                  <VBtn
+                    size="small"
+                    variant="text"
+                    color="primary"
+                    :loading="busyId === item.id"
+                    :aria-label="t('contentAudit.accept')"
+                    @click="handleAccept(item)"
+                  >
+                    {{ t('contentAudit.accept') }}
+                  </VBtn>
+                  <VBtn
+                    size="small"
+                    variant="text"
+                    color="error"
+                    :loading="busyId === item.id"
+                    :aria-label="t('contentAudit.delete')"
+                    @click="handleDelete(item)"
+                  >
+                    {{ t('contentAudit.delete') }}
+                  </VBtn>
+                </div>
+                <span v-else class="media-meta">{{ t('contentAudit.noAction') }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </VTable>
+      </div>
+    </VCard>
 
-    <div v-if="items.length > 0" class="audit-footer">
+    <footer v-if="items.length > 0" class="audit-footer">
+      <VSelect
+        :model-value="pageSize"
+        :items="PAGE_SIZES"
+        density="compact"
+        variant="solo"
+        flat
+        rounded="pill"
+        hide-details
+        class="audit-page-size-select"
+        data-testid="audit-page-size"
+        :aria-label="t('common.itemsPerPage')"
+        @update:model-value="changePageSize"
+      />
+      <span class="audit-page-info" data-testid="audit-page-info">
+        {{ t('contentAudit.pageInfo', { start: pageStart, end: pageEnd, total }) }}
+      </span>
       <VPagination
         :model-value="page"
         :length="pageCount"
-        :total-visible="5"
-        density="compact"
+        :total-visible="7"
+        show-first-last-page
         :aria-label="t('contentAudit.pagination')"
         @update:model-value="changePage"
       />
-      <div class="audit-page-size">
-        <span class="media-meta">{{ t('contentAudit.perPage') }}</span>
-        <VChip
-          v-for="size in PAGE_SIZES"
-          :key="size"
-          size="small"
-          variant="tonal"
-          :color="size === pageSize ? 'primary' : undefined"
-          :data-testid="`audit-size-${size}`"
-          @click="changePageSize(size)"
-        >
-          {{ size }}
-        </VChip>
-      </div>
-    </div>
+    </footer>
 
     <NoDataFound
       v-else-if="loaded"
@@ -345,7 +353,7 @@ onMounted(fetchData)
 .content-audit-page {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .audit-stats {
@@ -358,6 +366,13 @@ onMounted(fetchData)
   gap: 4px;
 }
 
+.audit-table-card {
+  overflow: hidden;
+  border: var(--app-surface-border);
+  background: var(--app-grouped-list-background);
+  box-shadow: var(--app-card-rest-shadow);
+}
+
 .audit-table-wrap {
   width: 100%;
   overflow: auto;
@@ -366,73 +381,124 @@ onMounted(fetchData)
 
 .audit-table {
   width: 100%;
-  min-width: 960px;
+  min-width: 1080px;
 }
 
 .audit-table thead th {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: rgb(var(--v-theme-surface));
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  background: rgb(var(--v-table-header-background));
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
-}
-
-.audit-table tbody tr:hover {
-  background: rgba(var(--v-theme-on-surface), 0.04);
 }
 
 .audit-table td,
 .audit-table th {
-  padding: 6px 8px;
-  vertical-align: top;
+  padding: 12px 16px;
+  vertical-align: middle;
+}
+
+.audit-table tbody td {
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.06);
+}
+
+.audit-table tbody tr {
+  transition: background-color 160ms ease;
+}
+
+.audit-table tbody tr:hover {
+  background: var(--app-grouped-list-hover-background);
+}
+
+.audit-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .col-time {
-  width: 160px;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+  width: 170px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 12px;
-  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .media-title {
   font-weight: 600;
+  line-height: 1.45;
 }
 
 .media-meta {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 12px;
-  opacity: 0.7;
+  line-height: 1.5;
 }
 
 .verdict-reason {
-  max-width: 260px;
+  display: -webkit-box;
+  overflow: hidden;
+  max-width: 360px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.55;
 }
 
 .path-cell {
-  max-width: 260px;
+  max-width: 320px;
   overflow: hidden;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  opacity: 0.8;
 }
 
 .audit-actions {
   display: flex;
   gap: 4px;
+  white-space: nowrap;
 }
 
 .audit-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.audit-page-size {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.audit-page-size-select {
+  flex: 0 0 108px;
+}
+
+.audit-page-size-select :deep(.v-field) {
+  border: 0 !important;
+  border-radius: var(--app-vuetify-rounded-pill);
+  background: var(--app-search-input-background) !important;
+  box-shadow: none !important;
+  min-block-size: 42px;
+}
+
+.audit-page-size-select :deep(.v-field__outline),
+.audit-page-size-select :deep(.v-field__overlay) {
+  display: none;
+}
+
+.audit-page-info {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.8rem;
+}
+
+.audit-footer :deep(.v-pagination) {
+  margin-inline-start: auto;
+}
+
+.audit-footer :deep(.v-pagination__item),
+.audit-footer :deep(.v-pagination__first),
+.audit-footer :deep(.v-pagination__prev),
+.audit-footer :deep(.v-pagination__next),
+.audit-footer :deep(.v-pagination__last) {
+  margin-block: 0;
 }
 </style>

@@ -86,7 +86,11 @@ async function getSiteIcon() {
 
   try {
     const icon = await getCachedSiteIcon(siteId, async () => {
-      const response = await api.get<{ icon?: string }>(`site/icon/${siteId}`, { feedback: 'silent' })
+      // 图标可能在站点地址修正后由后端补抓；绕过浏览器对旧失败响应的缓存。
+      const response = await api.get<{ icon?: string }>(`site/icon/${siteId}`, {
+        feedback: 'silent',
+        params: { _ts: Date.now() },
+      })
       return response?.icon || defaultSiteIcon
     })
     siteIcon.value = getDisplayImageUrl(icon, globalSettingsStore.globalSettings.GLOBAL_IMAGE_CACHE)

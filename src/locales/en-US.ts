@@ -793,6 +793,7 @@ export default {
     passedCount: '{count} passed',
     totalCount: '{count} total',
     perPage: 'Per page',
+    pageInfo: '{start}–{end} of {total}',
     pagination: 'Pagination',
     time: 'Time',
     media: 'Media',

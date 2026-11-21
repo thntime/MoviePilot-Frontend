@@ -6,8 +6,31 @@ import { apiJson } from '@tests/support/msw/response'
 import { server } from '@tests/support/msw/server'
 import { http } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
+import { defineComponent, h } from 'vue'
 
 const API_BASE_URL = 'http://localhost/api/v1/'
+
+const SelectStub = defineComponent({
+  name: 'VSelect',
+  props: {
+    modelValue: { type: [String, Number], default: '' },
+    items: { type: Array, default: () => [] },
+    label: { type: String, default: '' },
+  },
+  emits: ['update:modelValue'],
+  setup(props, { emit, attrs }) {
+    return () =>
+      h(
+        'select',
+        {
+          'aria-label': attrs['aria-label'] ?? props.label,
+          onChange: (event: Event) =>
+            emit('update:modelValue', (event.target as HTMLSelectElement).value),
+        },
+        props.items.map(item => h('option', { value: item }, String(item))),
+      )
+  },
+})
 
 interface AuditItem {
   id: string
@@ -135,6 +158,7 @@ describe('ContentAuditView', () => {
     renderWithProviders(ContentAuditView)
 
     await waitFor(() => expect(screen.getByText('资源 0')).toBeInTheDocument())
+    expect(screen.getByTestId('audit-page-info')).toHaveTextContent('第 1–25 条 / 共 60 条')
     const pager = document.querySelector('.v-pagination') as HTMLElement | null
     expect(pager).not.toBeNull()
     const pageButton = Array.from(pager?.querySelectorAll('button') ?? []).find(
@@ -155,10 +179,12 @@ describe('ContentAuditView', () => {
       }),
     )
 
-    renderWithProviders(ContentAuditView)
+    renderWithProviders(ContentAuditView, {
+      global: { stubs: { VSelect: SelectStub } },
+    })
 
     await waitFor(() => expect(screen.getByText('斗破苍穹')).toBeInTheDocument())
-    await userEvent.click(screen.getByTestId('audit-size-50'))
+    await userEvent.selectOptions(screen.getByLabelText('每页条数'), '50')
 
     await waitFor(() => expect(requests.some(url => url.includes('count=50'))).toBe(true))
   })

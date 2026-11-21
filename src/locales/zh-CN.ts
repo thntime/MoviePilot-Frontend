@@ -769,6 +769,7 @@ export default {
     pendingSize: '占用 {size}',
     totalCount: '共 {count} 条',
     perPage: '每页',
+    pageInfo: '第 {start}–{end} 条 / 共 {total} 条',
     pagination: '分页',
     time: '时间',
     media: '媒体',

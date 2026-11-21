@@ -769,6 +769,7 @@ export default {
     passedCount: '已通過 {count} 條',
     totalCount: '共 {count} 條',
     perPage: '每頁',
+    pageInfo: '第 {start}–{end} 條 / 共 {total} 條',
     pagination: '分頁',
     time: '時間',
     media: '媒體',

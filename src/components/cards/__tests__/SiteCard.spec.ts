@@ -3,9 +3,10 @@ import SiteCard from '@/components/cards/SiteCard.vue'
 import { getActiveRequestsCount } from '@/utils/requestOptimizer'
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { createSite, createSiteStatistic, createSiteUserData } from '@tests/support/factories/site'
-import { deleteSiteHandler, siteIconHandler, testSiteConnectionHandler } from '@tests/support/msw/handlers/site'
+import { deleteSiteHandler, siteApiUrls, siteIconHandler, testSiteConnectionHandler } from '@tests/support/msw/handlers/site'
 import { server } from '@tests/support/msw/server'
 import { renderWithProviders } from '@tests/support/render'
+import { HttpResponse, http } from 'msw'
 import { defineComponent, h } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -235,6 +236,28 @@ describe('SiteCard interactions', () => {
     await fireEvent.click(container.querySelector('.site-card') as Element)
     expect(open).toHaveBeenCalledOnce()
     expect(mocks.openSharedDialog).not.toHaveBeenCalled()
+  })
+
+  it('adds a cache buster so a previously missing icon can be refreshed', async () => {
+    const site = createSite()
+    let requestedUrl = ''
+    server.use(
+      http.get(siteApiUrls.icon(site.id), ({ request }) => {
+        requestedUrl = request.url
+        return HttpResponse.json({
+          success: true,
+          message: '',
+          data: { icon: 'data:image/ico;base64,AAABAAEAICAAAAEAIACoEAAAFgAAACgAAAAgAAAAQAAAAAEAIAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAA8xvT/' },
+        })
+      }),
+    )
+    const { container } = await renderWithProviders(SiteCard, {
+      global: { stubs: imageStubs },
+      props: { site },
+    })
+
+    await waitFor(() => expect(requestedUrl).toContain('_ts='))
+    await waitFor(() => expect(container.querySelector<HTMLImageElement>('img')?.src).toContain('data:image/ico'))
   })
 
   it('silently falls back to the default icon when the icon is unavailable', async () => {
