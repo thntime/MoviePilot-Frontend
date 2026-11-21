@@ -29,8 +29,18 @@ import { useMediaSources } from '@/composables/useMediaSources'
 import { useGlobalSettingsStore } from '@/stores'
 import { useConfirm } from '@/composables/useConfirm'
 
+interface DownloadMediaAlternative {
+  media_source: string
+  media_id: string
+  title?: string
+  year?: string | null
+  type?: string | null
+  poster?: string | null
+}
+
 interface DownloadAddedData {
   requires_confirmation?: boolean
+  alternatives?: DownloadMediaAlternative[]
 }
 
 // 多语言支持
@@ -444,6 +454,45 @@ function fillMissingEpisodes() {
 }
 
 // 添加下载
+// 同名多版本待选择列表；非空时渲染版本选择层
+const alternativeVersions = ref<DownloadMediaAlternative[]>([])
+// 版本选择的完成回调，选完（或取消）后继续提交流程
+let alternativeResolver: ((value: DownloadMediaAlternative | null) => void) | null = null
+
+// 弹出版本选择层，返回用户选中的版本；取消返回 null
+function pickAlternativeVersion(
+  alternatives: DownloadMediaAlternative[],
+): Promise<DownloadMediaAlternative | null> {
+  alternativeVersions.value = alternatives
+  return new Promise(resolve => {
+    alternativeResolver = resolve
+  })
+}
+
+// 选中一个版本，关闭选择层并继续提交
+function chooseAlternativeVersion(item: DownloadMediaAlternative) {
+  const resolver = alternativeResolver
+  alternativeResolver = null
+  alternativeVersions.value = []
+  resolver?.(item)
+}
+
+// 取消版本选择，中止本次下载
+function cancelAlternativeVersion() {
+  const resolver = alternativeResolver
+  alternativeResolver = null
+  alternativeVersions.value = []
+  resolver?.(null)
+}
+
+// 版本条目的展示文案：标题 (年份) 类型
+function alternativeLabel(item: DownloadMediaAlternative): string {
+  const parts = [item.title]
+  if (item.year) parts.push(`(${item.year})`)
+  if (item.type) parts.push(item.type)
+  return parts.filter(Boolean).join(' ')
+}
+
 async function addDownload() {
   startNProgress()
   loading.value = true
@@ -494,16 +543,26 @@ async function addDownload() {
         throw error
       }
 
-      const confirmed = await createConfirm({
-        type: 'warn',
-        title: t('dialog.addDownload.unrecognizedTitle'),
-        content: t('dialog.addDownload.unrecognizedContent'),
-        confirmText: t('dialog.addDownload.continueDownload'),
-      })
-      if (!confirmed) return
+      // 同名多版本：后端拒绝静默挑版本，让用户选一个再带身份复提。
+      const alternatives = error.payload.data?.alternatives || []
+      if (Array.isArray(alternatives) && alternatives.length > 0) {
+        const picked = await pickAlternativeVersion(alternatives)
+        if (!picked) return
+        payload.media_source = picked.media_source as typeof payload.media_source
+        payload.media_id = picked.media_id
+        await api.post<null>(endpoint, payload, { feedback: 'silent' })
+      } else {
+        const confirmed = await createConfirm({
+          type: 'warn',
+          title: t('dialog.addDownload.unrecognizedTitle'),
+          content: t('dialog.addDownload.unrecognizedContent'),
+          confirmText: t('dialog.addDownload.continueDownload'),
+        })
+        if (!confirmed) return
 
-      payload.allow_unrecognized = true
-      await api.post<null>(endpoint, payload, { feedback: 'silent' })
+        payload.allow_unrecognized = true
+        await api.post<null>(endpoint, payload, { feedback: 'silent' })
+      }
     }
 
     // 添加下载成功
@@ -753,6 +812,40 @@ onMounted(() => {
         @select="handleMediaSelected"
         @close="mediaSelectorDialog = false"
       />
+    </VDialog>
+    <!-- 同名多版本选择层 -->
+    <VDialog
+      :model-value="alternativeVersions.length > 0"
+      width="30rem"
+      persistent
+      data-testid="alternative-version-dialog"
+    >
+      <VCard>
+        <VCardTitle>{{ t('dialog.addDownload.ambiguousTitle') }}</VCardTitle>
+        <VCardText>
+          <div class="text-body-2 text-medium-emphasis mb-3">
+            {{ t('dialog.addDownload.ambiguousContent') }}
+          </div>
+          <div class="d-flex flex-column gap-2">
+            <VBtn
+              v-for="item in alternativeVersions"
+              :key="`${item.media_source}:${item.media_id}`"
+              variant="tonal"
+              block
+              :data-testid="`alternative-version-${item.media_id}`"
+              @click="chooseAlternativeVersion(item)"
+            >
+              {{ alternativeLabel(item) }}
+            </VBtn>
+          </div>
+        </VCardText>
+        <VCardActions>
+          <VSpacer />
+          <VBtn variant="text" data-testid="alternative-version-cancel" @click="cancelAlternativeVersion">
+            {{ t('dialog.addDownload.ambiguousCancel') }}
+          </VBtn>
+        </VCardActions>
+      </VCard>
     </VDialog>
   </VDialog>
 </template>

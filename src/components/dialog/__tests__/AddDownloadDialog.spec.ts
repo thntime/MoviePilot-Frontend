@@ -596,6 +596,87 @@ describe('AddDownloadDialog submissions', () => {
     expect(mocks.doneNProgress).toHaveBeenCalledOnce()
   })
 
+  it('retries with the picked identity when the backend reports same-title versions', async () => {
+    const submitted: Array<Record<string, unknown>> = []
+    server.use(
+      http.post(new URL('download/add', API_BASE_URL).href, async ({ request }) => {
+        submitted.push((await request.json()) as Record<string, unknown>)
+        if (submitted.length === 1) {
+          return HttpResponse.json({
+            data: {
+              requires_confirmation: true,
+              alternatives: [
+                { media_source: 'themoviedb', media_id: '243224', title: '凡人修仙传', year: '2025', type: '电视剧' },
+                { media_source: 'themoviedb', media_id: '106449', title: '凡人修仙传', year: '2020', type: '电视剧' },
+              ],
+            },
+            message: '《凡人修仙传》有多个同名版本，请选择要下载的版本',
+            success: false,
+          })
+        }
+        return apiJson({ download_id: 'picked-version' })
+      }),
+    )
+    const user = userEvent.setup()
+    const { events } = await renderDialog({
+      torrent: createTorrent({ media_id: undefined, media_source: undefined }),
+    })
+
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    // 版本选择层出现，展示两个同名版本；未识别确认框不应出现。
+    await waitFor(() => expect(screen.getByTestId('alternative-version-dialog')).toBeInTheDocument())
+    expect(screen.getByTestId('alternative-version-243224')).toHaveTextContent('凡人修仙传 (2025) 电视剧')
+    expect(screen.getByTestId('alternative-version-106449')).toHaveTextContent('凡人修仙传 (2020) 电视剧')
+    expect(mocks.confirm).not.toHaveBeenCalled()
+
+    // 选动漫版本，复提时带选定身份。
+    await user.click(screen.getByTestId('alternative-version-106449'))
+
+    await waitFor(() => expect(events.done).toHaveBeenCalled())
+    expect(submitted).toHaveLength(2)
+    expect(submitted[0]).not.toHaveProperty('media_source')
+    expect(submitted[1]).toMatchObject({ media_source: 'themoviedb', media_id: '106449' })
+    expect(submitted[1]).not.toHaveProperty('allow_unrecognized')
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('aborts the download when the version picker is cancelled', async () => {
+    const submitted: Array<Record<string, unknown>> = []
+    server.use(
+      http.post(new URL('download/add', API_BASE_URL).href, async ({ request }) => {
+        submitted.push((await request.json()) as Record<string, unknown>)
+        return HttpResponse.json({
+          data: {
+            requires_confirmation: true,
+            alternatives: [
+              { media_source: 'themoviedb', media_id: '243224', title: '斗破苍穹', year: '2017', type: '电视剧' },
+              { media_source: 'themoviedb', media_id: '79481', title: '斗破苍穹', year: '2018', type: '电视剧' },
+            ],
+          },
+          message: '《斗破苍穹》有多个同名版本，请选择要下载的版本',
+          success: false,
+        })
+      }),
+    )
+    const user = userEvent.setup()
+    const { events } = await renderDialog({
+      torrent: createTorrent({ media_id: undefined, media_source: undefined }),
+    })
+
+    await user.click(screen.getByRole('button', { name: '开始下载' }))
+
+    await waitFor(() => expect(screen.getByTestId('alternative-version-dialog')).toBeInTheDocument())
+    await user.click(screen.getByTestId('alternative-version-cancel'))
+
+    await waitFor(() => expect(screen.queryByTestId('alternative-version-dialog')).not.toBeInTheDocument())
+    expect(submitted).toHaveLength(1)
+    expect(events.done).not.toHaveBeenCalled()
+    expect(events.error).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
   it('keeps the download dialog open when unrecognized download confirmation is cancelled', async () => {
     const submitted = vi.fn()
     server.use(
