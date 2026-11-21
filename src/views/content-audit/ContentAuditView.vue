@@ -9,14 +9,58 @@ const { t } = useI18n()
 
 // 待处理记录
 const items = ref<ContentVerifyItem[]>([])
-// 待处理总数
+// 当前筛选条件下的记录总数
 const total = ref(0)
 // 待处理占用（字节）
 const pendingSize = ref(0)
+// 各状态记录数
+const counts = ref<Record<string, number>>({})
+// 状态筛选，all 表示全部
+const status = ref('all')
 // 正在处理的记录标识
 const busyId = ref('')
 // 是否已加载过
 const loaded = ref(false)
+
+// 状态筛选项：全部 + 各状态及其记录数
+const statusOptions = computed(() => {
+  const values = counts.value || {}
+  const all = Object.values(values).reduce((sum, value) => sum + (Number(value) || 0), 0)
+  return [
+    { value: 'all', label: t('contentAudit.statusAll'), count: all },
+    { value: 'reject', label: t('contentAudit.statusReject'), count: values.reject || 0 },
+    { value: 'pass', label: t('contentAudit.statusPass'), count: values.pass || 0 },
+    { value: 'skipped', label: t('contentAudit.statusSkipped'), count: values.skipped || 0 },
+    { value: 'manual', label: t('contentAudit.statusManual'), count: values.manual || 0 },
+    { value: 'deleted', label: t('contentAudit.statusDeleted'), count: values.deleted || 0 },
+  ]
+})
+
+// 结论标签与配色
+const verdictMeta: Record<string, { labelKey: string; color: string }> = {
+  reject: { labelKey: 'contentAudit.statusReject', color: 'warning' },
+  pass: { labelKey: 'contentAudit.statusPass', color: 'success' },
+  skipped: { labelKey: 'contentAudit.statusSkipped', color: 'info' },
+  manual: { labelKey: 'contentAudit.statusManual', color: 'primary' },
+  deleted: { labelKey: 'contentAudit.statusDeleted', color: 'error' },
+}
+
+// 结论文案
+function verdictLabel(decision: string): string {
+  const meta = verdictMeta[decision] || verdictMeta.reject
+  return t(meta.labelKey)
+}
+
+// 结论配色
+function verdictColor(decision: string): string {
+  return (verdictMeta[decision] || verdictMeta.reject).color
+}
+
+// 切换状态筛选并重新读取
+function selectStatus(value: unknown) {
+  status.value = String(value || 'all')
+  void fetchData()
+}
 
 // 字节转可读大小
 function formatSize(bytes: number): string {
@@ -49,18 +93,24 @@ function formatConfidence(value: number): string {
   return `${Math.round(ratio * 100)}%`
 }
 
-// 读取待处理记录
+// 读取内容校验记录
 async function fetchData() {
   try {
-    const data = await contentVerifyList({ page: 1, count: 200 })
+    const data = await contentVerifyList({ page: 1, count: 200, status: status.value })
     items.value = data?.items || []
     total.value = data?.total || 0
     pendingSize.value = data?.pending_size || 0
+    counts.value = data?.counts || {}
   } catch (error) {
     console.error(error)
   } finally {
     loaded.value = true
   }
+}
+
+// 处理完一条记录后按当前筛选重读，保证计数与列表一致
+async function refreshAfterAction() {
+  await fetchData()
 }
 
 // 人工放行：按原路径强制整理
@@ -70,9 +120,7 @@ async function handleAccept(item: ContentVerifyItem) {
   try {
     const result = await acceptContentVerify(item.id)
     if (result?.success) {
-      items.value = items.value.filter(row => row.id !== item.id)
-      total.value = Math.max(0, total.value - 1)
-      pendingSize.value = Math.max(0, pendingSize.value - item.total_size)
+      await refreshAfterAction()
     }
   } catch (error) {
     console.error(error)
@@ -88,9 +136,7 @@ async function handleDelete(item: ContentVerifyItem) {
   try {
     const result = await deleteContentVerify(item.id)
     if (result?.success) {
-      items.value = items.value.filter(row => row.id !== item.id)
-      total.value = Math.max(0, total.value - 1)
-      pendingSize.value = Math.max(0, pendingSize.value - item.total_size)
+      await refreshAfterAction()
     }
   } catch (error) {
     console.error(error)
@@ -108,17 +154,40 @@ onMounted(fetchData)
 
     <div class="audit-stats">
       <VChip color="warning" variant="tonal" size="small">
-        {{ t('contentAudit.pendingCount', { count: total }) }}
+        {{ t('contentAudit.pendingCount', { count: counts.reject || 0 }) }}
+      </VChip>
+      <VChip color="success" variant="tonal" size="small">
+        {{ t('contentAudit.passedCount', { count: counts.pass || 0 }) }}
       </VChip>
       <VChip color="info" variant="tonal" size="small">
         {{ t('contentAudit.pendingSize', { size: formatSize(pendingSize) }) }}
       </VChip>
     </div>
 
+    <VChipGroup
+      :model-value="status"
+      class="audit-filter"
+      mandatory
+      filter
+      @update:model-value="selectStatus"
+    >
+      <VChip
+        v-for="option in statusOptions"
+        :key="option.value"
+        :value="option.value"
+        size="small"
+        variant="tonal"
+        :data-testid="`audit-filter-${option.value}`"
+      >
+        {{ option.label }} {{ option.count }}
+      </VChip>
+    </VChipGroup>
+
     <VTable v-if="items.length > 0" class="audit-table" density="compact">
       <thead>
         <tr>
           <th>{{ t('contentAudit.media') }}</th>
+          <th>{{ t('contentAudit.conclusion') }}</th>
           <th>{{ t('contentAudit.verdict') }}</th>
           <th>{{ t('contentAudit.evidence') }}</th>
           <th>{{ t('contentAudit.files') }}</th>
@@ -137,6 +206,16 @@ onMounted(fetchData)
             </div>
           </td>
           <td>
+            <VChip
+              size="small"
+              variant="tonal"
+              :color="verdictColor(item.decision)"
+              :data-testid="`audit-verdict-${item.id}`"
+            >
+              {{ verdictLabel(item.decision) }}
+            </VChip>
+          </td>
+          <td>
             <div class="verdict-reason">{{ item.reason || '-' }}</div>
             <div class="media-meta">{{ t('contentAudit.confidence') }}{{ formatConfidence(item.confidence) }}</div>
           </td>
@@ -152,7 +231,7 @@ onMounted(fetchData)
           </td>
           <td class="path-cell" :title="item.src">{{ item.src }}</td>
           <td>
-            <div class="audit-actions">
+            <div v-if="item.decision === 'reject'" class="audit-actions">
               <VBtn
                 size="small"
                 variant="text"
@@ -174,6 +253,7 @@ onMounted(fetchData)
                 {{ t('contentAudit.delete') }}
               </VBtn>
             </div>
+            <span v-else class="media-meta">{{ t('contentAudit.noAction') }}</span>
           </td>
         </tr>
       </tbody>
@@ -199,6 +279,10 @@ onMounted(fetchData)
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.audit-filter {
+  gap: 4px;
 }
 
 .audit-table {

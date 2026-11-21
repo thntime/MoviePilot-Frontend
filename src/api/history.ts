@@ -6,8 +6,10 @@ export async function clearLegacyTransferHistory(): Promise<void> {
   await api.delete<null>('history/transfer/all', { feedback: 'silent' })
 }
 
-// 查询待处理的下载内容校验记录
-export async function contentVerifyList(params: { page?: number; count?: number } = {}) {
+// 查询下载内容校验记录，status 为空或 all 时返回全部状态
+export async function contentVerifyList(
+  params: { page?: number; count?: number; status?: string } = {},
+) {
   return await api.get<ContentVerifyPage>('history/verify', { params })
 }
 

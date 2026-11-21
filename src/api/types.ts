@@ -3240,4 +3240,5 @@ export interface ContentVerifyPage {
   items: ContentVerifyItem[]
   total: number
   pending_size: number
+  counts: Record<string, number>
 }

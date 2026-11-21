@@ -147,7 +147,7 @@ export function getNavMenus(t: Composer['t']): NavMenu[] {
     },
     {
       title: t('navItems.contentAudit'),
-      icon: 'mdi-shield-search-outline',
+      icon: 'mdi-shield-search',
       iconColor: 'warning',
       to: '/content-audit',
       header: t('menu.organize'),
