@@ -8,7 +8,7 @@ export async function clearLegacyTransferHistory(): Promise<void> {
 
 // 查询下载内容校验记录，status 为空或 all 时返回全部状态
 export async function contentVerifyList(
-  params: { page?: number; count?: number; status?: string } = {},
+  params: { page?: number; count?: number; status?: string; tier?: string } = {},
 ) {
   return await api.get<ContentVerifyPage>('history/verify', { params })
 }

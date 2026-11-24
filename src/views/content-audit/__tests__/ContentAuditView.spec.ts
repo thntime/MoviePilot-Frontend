@@ -83,6 +83,15 @@ function countByDecision(items: AuditItem[]) {
   return counts
 }
 
+function countByTier(items: AuditItem[]) {
+  const counts: Record<string, number> = { reject: 0, manual: 0, ai: 0, system: 0 }
+  items.forEach(item => {
+    const key = String(item.tier || '')
+    if (key) counts[key] = (counts[key] || 0) + 1
+  })
+  return counts
+}
+
 function listResponse(items: AuditItem[], total?: number) {
   const pending = items.filter(item => (item.decision || 'reject') === 'reject')
   return {
@@ -90,6 +99,7 @@ function listResponse(items: AuditItem[], total?: number) {
     total: total ?? items.length,
     pending_size: pending.reduce((sum: number, item) => sum + (item.total_size || 0), 0),
     counts: countByDecision(items),
+    tier_counts: countByTier(items),
     score_total: 11,
   }
 }
@@ -124,6 +134,35 @@ describe('ContentAuditView', () => {
     expect(screen.getByText('已通过 1 条')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '整理' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '删除' })).not.toBeInTheDocument()
+  })
+
+  it('shows the audit tier next to the verdict', async () => {
+    const verified = auditItem({ id: 'rec3', decision: 'pass', tier: 'system' })
+    server.use(
+      http.get(new URL('history/verify', API_BASE_URL).href, () => apiJson(listResponse([verified]))),
+    )
+
+    renderWithProviders(ContentAuditView)
+
+    await waitFor(() => expect(screen.getByTestId('audit-tier-rec3')).toBeInTheDocument())
+    expect(screen.getByTestId('audit-tier-rec3')).toHaveTextContent('系统确认')
+  })
+
+  it('filters records by tier and sends the tier parameter', async () => {
+    const requests: string[] = []
+    server.use(
+      http.get(new URL('history/verify', API_BASE_URL).href, ({ request }) => {
+        requests.push(request.url)
+        return apiJson(listResponse([auditItem({ id: 'rec4', decision: 'pass', tier: 'ai' })]))
+      }),
+    )
+
+    renderWithProviders(ContentAuditView)
+    await waitFor(() => expect(screen.getByTestId('audit-tier-filter-all')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByTestId('audit-tier-filter-ai'))
+
+    await waitFor(() => expect(requests.some(url => url.includes('tier=ai'))).toBe(true))
   })
 
   it('filters records by status and sends the status parameter', async () => {

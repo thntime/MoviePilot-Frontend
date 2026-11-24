@@ -18,10 +18,14 @@ const total = ref(0)
 const pendingSize = ref(0)
 // 各状态记录数
 const counts = ref<Record<string, number>>({})
+// 各档位记录数
+const tierCounts = ref<Record<string, number>>({})
 // 证据得分满分，由接口给出
 const scoreTotal = ref(0)
 // 状态筛选，all 表示全部
 const status = ref('all')
+// 档位筛选，all 表示全部
+const tier = ref('all')
 // 当前页码
 const page = ref(1)
 // 每页条数
@@ -42,6 +46,19 @@ const statusOptions = computed(() => {
     { value: 'skipped', label: t('contentAudit.statusSkipped'), count: values.skipped || 0 },
     { value: 'manual', label: t('contentAudit.statusManual'), count: values.manual || 0 },
     { value: 'deleted', label: t('contentAudit.statusDeleted'), count: values.deleted || 0 },
+  ]
+})
+
+// 档位筛选项：全部 + 四档及其记录数
+const tierOptions = computed(() => {
+  const values = tierCounts.value || {}
+  const all = Object.values(values).reduce((sum, value) => sum + (Number(value) || 0), 0)
+  return [
+    { value: 'all', label: t('contentAudit.tierAll'), count: all },
+    { value: 'reject', label: t('contentAudit.tierReject'), count: values.reject || 0 },
+    { value: 'manual', label: t('contentAudit.tierManual'), count: values.manual || 0 },
+    { value: 'ai', label: t('contentAudit.tierAi'), count: values.ai || 0 },
+    { value: 'system', label: t('contentAudit.tierSystem'), count: values.system || 0 },
   ]
 })
 
@@ -72,6 +89,25 @@ function verdictLabel(decision: string): string {
 // 结论配色
 function verdictColor(decision: string): string {
   return (verdictMeta[decision] || verdictMeta.reject).color
+}
+
+// 档位标签与配色
+const tierMeta: Record<string, { labelKey: string; color: string }> = {
+  reject: { labelKey: 'contentAudit.tierReject', color: 'error' },
+  manual: { labelKey: 'contentAudit.tierManual', color: 'warning' },
+  ai: { labelKey: 'contentAudit.tierAi', color: 'info' },
+  system: { labelKey: 'contentAudit.tierSystem', color: 'success' },
+}
+
+// 档位文案；空值表示老记录未分档
+function tierLabel(value: string): string {
+  const meta = tierMeta[value]
+  return meta ? t(meta.labelKey) : ''
+}
+
+// 档位配色
+function tierColor(value: string): string {
+  return (tierMeta[value] || { color: 'surface-variant' }).color
 }
 
 // 字节转可读大小
@@ -112,11 +148,13 @@ async function fetchData() {
       page: page.value,
       count: pageSize.value,
       status: status.value,
+      tier: tier.value,
     })
     items.value = data?.items || []
     total.value = data?.total || 0
     pendingSize.value = data?.pending_size || 0
     counts.value = data?.counts || {}
+    tierCounts.value = data?.tier_counts || {}
     scoreTotal.value = data?.score_total || 0
   } catch (error) {
     console.error(error)
@@ -133,6 +171,13 @@ async function refreshAfterAction() {
 // 切换状态筛选：回到第一页再读
 function selectStatus(value: unknown) {
   status.value = String(value || 'all')
+  page.value = 1
+  void fetchData()
+}
+
+// 切换档位筛选：回到第一页再读
+function selectTier(value: unknown) {
+  tier.value = String(value || 'all')
   page.value = 1
   void fetchData()
 }
@@ -223,6 +268,25 @@ onMounted(fetchData)
       </VChip>
     </VChipGroup>
 
+    <VChipGroup
+      :model-value="tier"
+      class="audit-filter audit-tier-filter"
+      mandatory
+      filter
+      @update:model-value="selectTier"
+    >
+      <VChip
+        v-for="option in tierOptions"
+        :key="option.value"
+        :value="option.value"
+        size="small"
+        variant="tonal"
+        :data-testid="`audit-tier-filter-${option.value}`"
+      >
+        {{ option.label }} {{ option.count }}
+      </VChip>
+    </VChipGroup>
+
     <VCard v-if="items.length > 0" class="audit-table-card">
       <div class="audit-table-wrap">
         <VTable class="audit-table">
@@ -259,6 +323,16 @@ onMounted(fetchData)
                   :data-testid="`audit-verdict-${item.id}`"
                 >
                   {{ verdictLabel(item.decision) }}
+                </VChip>
+                <VChip
+                  v-if="item.tier"
+                  size="small"
+                  variant="outlined"
+                  class="ml-1"
+                  :color="tierColor(item.tier)"
+                  :data-testid="`audit-tier-${item.id}`"
+                >
+                  {{ tierLabel(item.tier) }}
                 </VChip>
               </td>
               <td>
@@ -311,32 +385,34 @@ onMounted(fetchData)
       </div>
     </VCard>
 
-    <footer v-if="items.length > 0" class="audit-footer">
-      <VSelect
-        :model-value="pageSize"
-        :items="PAGE_SIZES"
-        density="compact"
-        variant="solo"
-        flat
-        rounded="pill"
-        hide-details
-        class="audit-page-size-select"
-        data-testid="audit-page-size"
-        :aria-label="t('common.itemsPerPage')"
-        @update:model-value="changePageSize"
-      />
-      <span class="audit-page-info" data-testid="audit-page-info">
-        {{ t('contentAudit.pageInfo', { start: pageStart, end: pageEnd, total }) }}
-      </span>
-      <VPagination
-        :model-value="page"
-        :length="pageCount"
-        :total-visible="7"
-        show-first-last-page
-        :aria-label="t('contentAudit.pagination')"
-        @update:model-value="changePage"
-      />
+<footer v-if="items.length > 0" class="audit-footer">
+    <VSelect
+      :model-value="pageSize"
+      :items="PAGE_SIZES"
+      density="compact"
+      variant="solo"
+      flat
+      rounded="pill"
+      hide-details
+      class="audit-page-size-select"
+      data-testid="audit-page-size"
+      :aria-label="t('common.itemsPerPage')"
+      @update:model-value="changePageSize"
+    />
+    <span class="audit-page-info" data-testid="audit-page-info">
+      {{ t('contentAudit.pageInfo', { start: pageStart, end: pageEnd, total }) }}
+    </span>
+    <VPagination
+      :model-value="page"
+      :length="pageCount"
+      :total-visible="7"
+      show-first-last-page
+      :aria-label="t('contentAudit.pagination')"
+      @update:model-value="changePage"
+    />
     </footer>
+
+
 
     <NoDataFound
       v-else-if="loaded"
@@ -364,6 +440,14 @@ onMounted(fetchData)
 
 .audit-filter {
   gap: 4px;
+}
+
+.audit-tier-filter {
+  margin-block-end: 8px;
+}
+
+.audit-footer {
+  margin-block-start: auto;
 }
 
 .audit-table-card {

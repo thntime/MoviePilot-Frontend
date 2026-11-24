@@ -3227,6 +3227,7 @@ export interface ContentVerifyItem {
   file_count: number
   total_size: number
   median_duration: number
+  tier: string
   platform: string
   share_code: string
   download_hash: string
@@ -3241,5 +3242,6 @@ export interface ContentVerifyPage {
   total: number
   pending_size: number
   counts: Record<string, number>
+  tier_counts: Record<string, number>
   score_total: number
 }
