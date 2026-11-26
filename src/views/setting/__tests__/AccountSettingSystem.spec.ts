@@ -315,6 +315,16 @@ function mockLoadedSettings() {
               active: true,
             },
             {
+              id: 'JellyfinModule',
+              name: 'Jellyfin',
+              name_i18n: 'Jellyfin',
+              type: 'mediaserver',
+              subtype: 'Jellyfin',
+              option_value: 'jellyfin',
+              enabled: true,
+              active: true,
+            },
+            {
               id: 'PlexModule',
               name: 'Plex',
               name_i18n: 'Plex',
@@ -925,6 +935,15 @@ describe('AccountSettingSystem', () => {
     expect(findPost('github/auth/manual')?.[1]).toEqual({ token: 'github-token' })
   })
 
+  it('ChatGPT 使用固定地址时仍可设置系统代理', async () => {
+    systemEnv = { ...systemEnv, AI_AGENT_ENABLE: true, LLM_PROVIDER: 'chatgpt' }
+    mocks.useLlmProviderDirectory.mockReturnValue(createLlmDirectoryState())
+    await renderSettings()
+    await expandLlmSettings()
+    expect(screen.queryByLabelText('LLM基础URL')).toBeNull()
+    await fireEvent.click(screen.getByLabelText('使用系统代理'))
+  })
+
   it('round-trips the user-editable application and wallpaper settings', async () => {
     await renderSettings()
     await screen.findByDisplayValue('https://moviepilot.example')
@@ -968,25 +987,23 @@ describe('AccountSettingSystem', () => {
     expect(screen.queryByLabelText('壁纸轮换时间')).not.toBeInTheDocument()
   })
 
-  it('hides every wallpaper control in effective light mode and preserves the dark wallpaper preference', async () => {
+  it('keeps wallpaper controls visible and editable in effective light mode', async () => {
     systemEnv = { ...systemEnv, WALLPAPER: 'static', WALLPAPER_IMAGE_URL: '/local/existing.jpg' }
     vuetify.theme.themes.value.glass.dark = false
     await renderSettings()
     await screen.findByDisplayValue('https://moviepilot.example')
 
-    for (const label of ['背景壁纸', '静态壁纸地址', '自定义壁纸API地址', '壁纸轮换时间']) {
-      expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
-    }
+    expect(screen.getByLabelText('背景壁纸')).toHaveValue('static')
+    expect(screen.getByLabelText('静态壁纸地址')).toHaveValue('/local/existing.jpg')
+    expect(screen.queryByLabelText('自定义壁纸API地址')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('壁纸轮换时间')).not.toBeInTheDocument()
+
+    await fireEvent.update(screen.getByLabelText('静态壁纸地址'), '/local/daylight.jpg')
     await fireEvent.click(getBasicCard().getByRole('button', { name: '保存' }))
     await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledWith('基础设置保存成功'))
     expect(findPost('system/env')?.[1]).toEqual(
-      expect.objectContaining({ WALLPAPER: 'static', WALLPAPER_IMAGE_URL: '/local/existing.jpg' }),
+      expect.objectContaining({ WALLPAPER: 'static', WALLPAPER_IMAGE_URL: '/local/daylight.jpg' }),
     )
-
-    vuetify.theme.themes.value.glass.dark = true
-    await nextTick()
-    expect(screen.getByLabelText('背景壁纸')).toHaveValue('static')
-    expect(screen.getByLabelText('静态壁纸地址')).toHaveValue('/local/existing.jpg')
     expect(mocks.apiPost).toHaveBeenCalledTimes(1)
   })
 
@@ -1180,6 +1197,28 @@ describe('AccountSettingSystem', () => {
     ])
     await waitFor(() => expect(screen.getByText('服务器1 / emby / 12')).toBeInTheDocument())
     expect(screen.queryByText('服务器3-edited / plex / 12')).not.toBeInTheDocument()
+  })
+
+  it('keeps disabled and newly added service types available for another configuration', async () => {
+    const user = userEvent.setup()
+    systemEnv.MEDIASERVER_SYNC_INTERVAL = 12
+    await renderSettings()
+    await screen.findByText('服务器1 / emby / 12')
+
+    const downloaderCard = getSettingsCard('下载器')
+    await user.click(downloaderCard.getAllByRole('button').at(-1)!)
+    await user.click(await screen.findByText('Transmission', { selector: '.v-list-item-title' }))
+    expect(screen.getByText('下载器4 / transmission / true')).toBeInTheDocument()
+    await user.click(downloaderCard.getAllByRole('button').at(-1)!)
+    expect(await screen.findByText('Transmission', { selector: '.v-list-item-title' })).toBeInTheDocument()
+
+    const mediaCard = getSettingsCard('媒体服务器')
+    await user.click(mediaCard.getAllByRole('button').at(-1)!)
+    await user.click(await screen.findByText('Jellyfin', { selector: '.v-list-item-title' }))
+    expect(screen.getByText('服务器4 / jellyfin / 12')).toBeInTheDocument()
+    await user.click(mediaCard.getAllByRole('button').at(-1)!)
+    await user.click(await screen.findByText('Jellyfin', { selector: '.v-list-item-title' }))
+    expect(screen.getByText('服务器5 / jellyfin / 12')).toBeInTheDocument()
   })
 
   it('prevents duplicate media server saves while the request is pending', async () => {
@@ -1394,6 +1433,29 @@ describe('AccountSettingSystem', () => {
     expect(useGlobalSettingsStore(pinia).globalSettings.COMMUNITY_MEDALS_ENABLED).toBe(false)
   })
 
+  it.each([true, false])('loads the lab knowledge switch %s and saves its opposite', async enabled => {
+    systemEnv.AI_AGENT_KNOWLEDGE_ENABLE = enabled
+    await renderSettings()
+    const dialog = await openAdvancedTab('实验室')
+    const knowledgeSwitch = dialog.getByLabelText('Agent 使用中心知识')
+    expect((knowledgeSwitch as HTMLInputElement).checked).toBe(enabled)
+    await fireEvent.click(knowledgeSwitch)
+    expect((knowledgeSwitch as HTMLInputElement).checked).toBe(!enabled)
+    await fireEvent.click(dialog.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(findPost('system/env')?.[1]).toEqual(expect.objectContaining({ AI_AGENT_KNOWLEDGE_ENABLE: !enabled }))
+  })
+
+  it('does not submit the knowledge setting to an older backend that does not declare it', async () => {
+    delete systemEnv.AI_AGENT_KNOWLEDGE_ENABLE
+    await renderSettings()
+    const dialog = await openAdvancedTab('实验室')
+    expect(dialog.queryByLabelText('Agent 使用中心知识')).not.toBeInTheDocument()
+    await fireEvent.click(dialog.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(findPost('system/env')?.[1]).not.toHaveProperty('AI_AGENT_KNOWLEDGE_ENABLE')
+  })
+
   it('loads a disabled CUE setting and allows enabling it without online music modules', async () => {
     systemEnv.MUSIC_CUE_ENABLE = false
     systemEnv.MODULE_ENABLE = { MusicBrainzModule: false, TheAudioDbModule: false }
@@ -1421,6 +1483,27 @@ describe('AccountSettingSystem', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(findPost('system/env')?.[1]).toEqual(expect.objectContaining({ MUSIC_LOCAL_COVER_ENABLE: !enabled }))
   })
+
+  it.each([
+    [undefined, 'strict', '严格校验失败时回落忽略时长', 'fallback_ignore_duration'],
+    ['fallback_ignore_duration', 'fallback_ignore_duration', '忽略时长校验', 'ignore_duration'],
+    ['ignore_duration', 'ignore_duration', '严格校验（默认）', 'strict'],
+  ])(
+    'loads and saves automatic music track alignment from %s to %s',
+    async (initial, expectedInitial, targetLabel, expectedSaved) => {
+      if (initial !== undefined) systemEnv.MUSIC_TRACK_MATCH = initial
+      systemEnv.MODULE_ENABLE = { MusicBrainzModule: false, TheAudioDbModule: false }
+      await renderSettings()
+      const dialog = await openAdvancedTab('媒体')
+      const trackMatchSelect = dialog.getByLabelText('自动整理曲目对齐方式')
+      expect(trackMatchSelect).toHaveValue(expectedInitial)
+      expect(trackMatchSelect.closest('section')).toHaveAccessibleName('音乐元数据')
+      await selectOption('自动整理曲目对齐方式', targetLabel)
+      await fireEvent.click(dialog.getByRole('button', { name: '保存' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(findPost('system/env')?.[1]).toEqual(expect.objectContaining({ MUSIC_TRACK_MATCH: expectedSaved }))
+    },
+  )
 
   it('round-trips advanced media metadata, recognition, and Fanart settings', async () => {
     const user = userEvent.setup()

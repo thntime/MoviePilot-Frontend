@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { ContentVerifyItem } from '@/api/types'
 import { acceptContentVerify, contentVerifyList, deleteContentVerify } from '@/api/history'
+import AppFilterBar from '@/components/filter/AppFilterBar.vue'
 import NoDataFound from '@/components/states/NoDataFound.vue'
 import { useI18n } from 'vue-i18n'
 
@@ -249,43 +250,41 @@ onMounted(fetchData)
       </VChip>
     </div>
 
-    <VChipGroup
-      :model-value="status"
-      class="audit-filter"
-      mandatory
-      filter
-      @update:model-value="selectStatus"
-    >
-      <VChip
-        v-for="option in statusOptions"
-        :key="option.value"
-        :value="option.value"
-        size="small"
-        variant="tonal"
-        :data-testid="`audit-filter-${option.value}`"
-      >
-        {{ option.label }} {{ option.count }}
-      </VChip>
-    </VChipGroup>
+    <AppFilterBar :collapsible="false">
+      <template #primary>
+        <VChipGroup :model-value="status" class="audit-filter" mandatory filter @update:model-value="selectStatus">
+          <VChip
+            v-for="option in statusOptions"
+            :key="option.value"
+            :value="option.value"
+            size="small"
+            variant="tonal"
+            :data-testid="`audit-filter-${option.value}`"
+          >
+            {{ option.label }} {{ option.count }}
+          </VChip>
+        </VChipGroup>
 
-    <VChipGroup
-      :model-value="tier"
-      class="audit-filter audit-tier-filter"
-      mandatory
-      filter
-      @update:model-value="selectTier"
-    >
-      <VChip
-        v-for="option in tierOptions"
-        :key="option.value"
-        :value="option.value"
-        size="small"
-        variant="tonal"
-        :data-testid="`audit-tier-filter-${option.value}`"
-      >
-        {{ option.label }} {{ option.count }}
-      </VChip>
-    </VChipGroup>
+        <VChipGroup
+          :model-value="tier"
+          class="audit-filter audit-tier-filter"
+          mandatory
+          filter
+          @update:model-value="selectTier"
+        >
+          <VChip
+            v-for="option in tierOptions"
+            :key="option.value"
+            :value="option.value"
+            size="small"
+            variant="tonal"
+            :data-testid="`audit-tier-filter-${option.value}`"
+          >
+            {{ option.label }} {{ option.count }}
+          </VChip>
+        </VChipGroup>
+      </template>
+    </AppFilterBar>
 
     <VCard v-if="items.length > 0" class="audit-table-card">
       <div class="audit-table-wrap">
@@ -337,9 +336,7 @@ onMounted(fetchData)
               </td>
               <td>
                 <div class="verdict-reason" :title="item.reason">{{ item.reason || '-' }}</div>
-                <div class="media-meta">
-                  {{ t('contentAudit.confidence') }}{{ formatConfidence(item.confidence) }}
-                </div>
+                <div class="media-meta">{{ t('contentAudit.confidence') }}{{ formatConfidence(item.confidence) }}</div>
               </td>
               <td>
                 <div :data-testid="`audit-score-${item.id}`">{{ item.score }} / {{ scoreTotal }}</div>
@@ -385,42 +382,38 @@ onMounted(fetchData)
       </div>
     </VCard>
 
-<footer v-if="items.length > 0" class="audit-footer">
-    <VSelect
-      :model-value="pageSize"
-      :items="PAGE_SIZES"
-      density="compact"
-      variant="solo"
-      flat
-      rounded="pill"
-      hide-details
-      class="audit-page-size-select"
-      data-testid="audit-page-size"
-      :aria-label="t('common.itemsPerPage')"
-      @update:model-value="changePageSize"
-    />
-    <span class="audit-page-info" data-testid="audit-page-info">
-      {{ t('contentAudit.pageInfo', { start: pageStart, end: pageEnd, total }) }}
-    </span>
-    <VPagination
-      :model-value="page"
-      :length="pageCount"
-      :total-visible="7"
-      show-first-last-page
-      :aria-label="t('contentAudit.pagination')"
-      @update:model-value="changePage"
-    />
+    <footer v-if="items.length > 0" class="audit-footer">
+      <VSelect
+        :model-value="pageSize"
+        :items="PAGE_SIZES"
+        density="compact"
+        variant="solo"
+        flat
+        rounded="pill"
+        hide-details
+        class="audit-page-size-select"
+        data-testid="audit-page-size"
+        :aria-label="t('common.itemsPerPage')"
+        @update:model-value="changePageSize"
+      />
+      <span class="audit-page-info" data-testid="audit-page-info">
+        {{ t('contentAudit.pageInfo', { start: pageStart, end: pageEnd, total }) }}
+      </span>
+      <VPagination
+        :model-value="page"
+        :length="pageCount"
+        :total-visible="7"
+        show-first-last-page
+        :aria-label="t('contentAudit.pagination')"
+        @update:model-value="changePage"
+      />
     </footer>
-
-
 
     <NoDataFound
       v-else-if="loaded"
       error-code="200"
       :error-title="filtered ? t('contentAudit.emptyFilteredTitle') : t('contentAudit.emptyTitle')"
-      :error-description="
-        filtered ? t('contentAudit.emptyFilteredDescription') : t('contentAudit.emptyDescription')
-      "
+      :error-description="filtered ? t('contentAudit.emptyFilteredDescription') : t('contentAudit.emptyDescription')"
     />
   </div>
 </template>
@@ -442,8 +435,15 @@ onMounted(fetchData)
   gap: 4px;
 }
 
+// 两组筛选胶囊同在筛选轨道内，行间距沿用页面自身的 16px。
 .audit-tier-filter {
-  margin-block-end: 8px;
+  margin-block-start: 16px;
+}
+
+// 筛选轨道在这里只承担「筛选落在衬底容器内」的语义，外边距与内边距交给页面自身的间距，保持原有排版。
+.content-audit-page :deep(.app-filter-bar) {
+  margin: 0;
+  padding-block: 0;
 }
 
 .audit-footer {

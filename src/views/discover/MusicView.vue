@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppFilterBar from '@/components/filter/AppFilterBar.vue'
 import MediaCardListView from '@/views/discover/MediaCardListView.vue'
 import { useI18n } from 'vue-i18n'
 
@@ -98,40 +99,56 @@ const filterParams = computed(() => {
 watch([mode, entity, rangeName, sortBy, freshSort, freshDays, freshScope, coverFilter], () => {
   currentKey.value++
 })
+const secondaryFilterCount = computed(() => {
+  let count = 0
+  if (mode.value === 'chart') {
+    if (entity.value !== 'album') count += 1
+    if (rangeName.value !== 'this_month') count += 1
+    if (sortBy.value !== 'listen_count.desc') count += 1
+  } else {
+    if (freshSort.value !== 'release_date') count += 1
+    if (freshScope.value !== 'all') count += 1
+    if (freshDays.value !== 14) count += 1
+  }
+  if (coverFilter.value !== 'all') count += 1
+  return count
+})
 </script>
 
 <template>
-  <div class="px-3 music-explore-filters">
-    <div class="music-filter-row">
-      <VLabel class="music-filter-label">{{ t('music.filter.mode') }}</VLabel>
-      <VChipGroup v-model="mode" mandatory class="music-filter-chips">
-        <VChip v-for="(label, value) in modeOptions" :key="value" :value="value" filter tile>
-          {{ label }}
-        </VChip>
-      </VChipGroup>
-    </div>
+  <AppFilterBar :active-count="secondaryFilterCount" class="music-explore-filters">
+    <template #primary>
+      <div class="app-filter-row">
+        <VLabel class="app-filter-label">{{ t('music.filter.mode') }}</VLabel>
+        <VChipGroup v-model="mode" mandatory class="app-filter-chips music-filter-chips">
+          <VChip v-for="(label, value) in modeOptions" :key="value" :value="value">
+            {{ label }}
+          </VChip>
+        </VChipGroup>
+      </div>
+    </template>
 
     <template v-if="mode === 'chart'">
-      <div class="music-filter-row">
-        <VLabel class="music-filter-label">{{ t('music.filter.entity') }}</VLabel>
-        <VChipGroup v-model="entity" mandatory class="music-filter-chips">
-          <VChip v-for="(label, value) in entityOptions" :key="value" :value="value" filter tile>
+      <div class="app-filter-row">
+        <VLabel class="app-filter-label">{{ t('music.filter.entity') }}</VLabel>
+        <VChipGroup v-model="entity" mandatory class="app-filter-chips music-filter-chips">
+          <VChip v-for="(label, value) in entityOptions" :key="value" :value="value">
             {{ label }}
           </VChip>
         </VChipGroup>
       </div>
-      <div class="music-filter-row">
-        <VLabel class="music-filter-label">{{ t('music.filter.period') }}</VLabel>
-        <VChipGroup v-model="rangeName" mandatory class="music-filter-chips">
-          <VChip v-for="(label, value) in rangeOptions" :key="value" :value="value" filter tile>
+      <div class="app-filter-row">
+        <VLabel class="app-filter-label">{{ t('music.filter.period') }}</VLabel>
+        <VChipGroup v-model="rangeName" mandatory class="app-filter-chips music-filter-chips">
+          <VChip v-for="(label, value) in rangeOptions" :key="value" :value="value">
             {{ label }}
           </VChip>
         </VChipGroup>
       </div>
-      <div class="music-filter-row">
-        <VLabel class="music-filter-label">{{ t('music.filter.sort') }}</VLabel>
-        <VChipGroup v-model="sortBy" mandatory class="music-filter-chips">
-          <VChip v-for="(label, value) in sortOptions" :key="value" :value="value" filter tile>
+      <div class="app-filter-row">
+        <VLabel class="app-filter-label">{{ t('music.filter.sort') }}</VLabel>
+        <VChipGroup v-model="sortBy" mandatory class="app-filter-chips music-filter-chips">
+          <VChip v-for="(label, value) in sortOptions" :key="value" :value="value">
             {{ label }}
           </VChip>
         </VChipGroup>
@@ -139,18 +156,18 @@ watch([mode, entity, rangeName, sortBy, freshSort, freshDays, freshScope, coverF
     </template>
 
     <template v-else>
-      <div class="music-filter-row">
-        <VLabel class="music-filter-label">{{ t('music.filter.sort') }}</VLabel>
-        <VChipGroup v-model="freshSort" mandatory class="music-filter-chips">
-          <VChip v-for="(label, value) in freshSortOptions" :key="value" :value="value" filter tile>
+      <div class="app-filter-row">
+        <VLabel class="app-filter-label">{{ t('music.filter.sort') }}</VLabel>
+        <VChipGroup v-model="freshSort" mandatory class="app-filter-chips music-filter-chips">
+          <VChip v-for="(label, value) in freshSortOptions" :key="value" :value="value">
             {{ label }}
           </VChip>
         </VChipGroup>
       </div>
-      <div class="music-filter-row">
-        <VLabel class="music-filter-label">{{ t('music.filter.scope') }}</VLabel>
-        <VChipGroup v-model="freshScope" mandatory class="music-filter-chips">
-          <VChip v-for="(label, value) in freshScopeOptions" :key="value" :value="value" filter tile>
+      <div class="app-filter-row">
+        <VLabel class="app-filter-label">{{ t('music.filter.scope') }}</VLabel>
+        <VChipGroup v-model="freshScope" mandatory class="app-filter-chips music-filter-chips">
+          <VChip v-for="(label, value) in freshScopeOptions" :key="value" :value="value">
             {{ label }}
           </VChip>
         </VChipGroup>
@@ -166,33 +183,20 @@ watch([mode, entity, rangeName, sortBy, freshSort, freshDays, freshScope, coverF
       </div>
     </template>
 
-    <div class="music-filter-row">
-      <VLabel class="music-filter-label">{{ t('music.filter.cover') }}</VLabel>
-      <VChipGroup v-model="coverFilter" mandatory class="music-filter-chips">
-        <VChip value="all" filter tile>{{ t('music.filter.all') }}</VChip>
-        <VChip value="with_cover" filter tile>{{ t('music.filter.withCover') }}</VChip>
+    <div class="app-filter-row">
+      <VLabel class="app-filter-label">{{ t('music.filter.cover') }}</VLabel>
+      <VChipGroup v-model="coverFilter" mandatory class="app-filter-chips music-filter-chips">
+        <VChip value="all">{{ t('music.filter.all') }}</VChip>
+        <VChip value="with_cover">{{ t('music.filter.withCover') }}</VChip>
       </VChipGroup>
     </div>
-  </div>
-  <MediaCardListView :key="currentKey" apipath="music/explore" :params="filterParams" />
+  </AppFilterBar>
+  <MediaCardListView :key="currentKey" apipath="music/explore" :params="filterParams" hide-type-badge />
 </template>
 
 <style scoped>
-.music-filter-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-block-end: 0.5rem;
-}
-
-.music-filter-label {
-  flex: 0 0 auto;
-}
-
 /* 周期等筛选项在小屏幕下允许左右滑动，但不换行 */
 .music-filter-chips {
-  flex: 1 1 0%;
-  min-inline-size: 0;
   flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: none;

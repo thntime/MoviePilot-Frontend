@@ -2,15 +2,21 @@
 import type { MediaServerPlayItem } from '@/api/types'
 import noImage from '@images/no-image.jpeg'
 import { openMediaServerItem } from '@/utils/appDeepLink'
+import { vNativeCardMenu } from '@/native/card'
+import { nativeChromeActive } from '@/native/layout'
+import { createNativeDashboardMediaCardMenu } from '@/utils/nativeDashboardMediaCard'
 import { useGlobalSettingsStore } from '@/stores'
 import { getProxyImageUrl } from '@/utils/imageUtils'
+import { useI18n } from 'vue-i18n'
 // 输入参数
 const props = defineProps({
   media: Object as PropType<MediaServerPlayItem>,
+  server: String,
   width: String,
   height: String,
 })
 const globalSettingsStore = useGlobalSettingsStore()
+const { t } = useI18n()
 
 // 图片是否加载完成
 const imageLoaded = ref(false)
@@ -39,6 +45,19 @@ async function goPlay() {
   }
 }
 
+/** App 长按菜单仅提供当前媒体的本地播放与原媒体服务器打开入口。 */
+const nativeCardMenu = computed(() =>
+  createNativeDashboardMediaCardMenu(
+    () => props.media,
+    () => props.server,
+    {
+      play: t('file.play'),
+      mediaServer: t('notificationSwitch.mediaServer'),
+      openInServer: server => t('dashboard.openInServer', { server }),
+    },
+  ),
+)
+
 // 计算图片地址
 const getImgUrl = computed(() => {
   const image = props.media?.image || ''
@@ -55,21 +74,27 @@ const getImgUrl = computed(() => {
 <template>
   <VHover>
     <template #default="hover">
-      <!-- Hover 命中区域保持静止，避免卡片上浮后底边反复触发 mouseleave。 -->
+      <!-- Web 的 Hover 命中区域保持静止；App 不上浮卡片，避免位置变化撤销原生长按菜单。 -->
       <div v-bind="hover.props" class="backdrop-card-hover-area">
         <VCard
+          v-native-card-menu="nativeCardMenu"
           :style="cardStyle"
-          class="app-hover-lift-card ring-gray-500"
+          :role="nativeChromeActive ? 'group' : undefined"
+          :aria-label="nativeChromeActive ? props.media?.title : undefined"
+          :data-glass-optical-mode="
+            Boolean(props.media?.image) && imageLoaded && !imageLoadError ? 'excluded' : undefined
+          "
+          class="backdrop-card app-hover-lift-card"
           :class="{
-            'app-hover-lift-card--hovering': hover.isHovering,
-            'ring-1': imageLoaded,
+            'app-hover-lift-card--hovering': hover.isHovering && !nativeChromeActive,
+            'backdrop-card--loaded': imageLoaded,
           }"
           @click="goPlay"
         >
           <template #image>
             <VImg
               :src="getImgUrl"
-              aspect-ratio="2/3"
+              :aspect-ratio="3 / 2"
               class="backdrop-card-image"
               :class="{ 'backdrop-card-image--loaded': imageLoaded }"
               cover
@@ -83,14 +108,12 @@ const getImgUrl = computed(() => {
               </template>
               <template #default>
                 <VCardText
-                  class="w-full flex flex-col flex-wrap justify-end align-left text-white absolute bottom-0 cursor-pointer pa-2"
+                  class="backdrop-card-overlay w-full flex flex-col justify-end absolute bottom-0 cursor-pointer pa-3"
                 >
-                  <h1
-                    class="mb-1 text-white text-shadow font-bold text-lg line-clamp-2 overflow-hidden text-ellipsis ..."
-                  >
+                  <h1 class="backdrop-card-title mb-1 line-clamp-2 overflow-hidden text-ellipsis">
                     {{ props.media?.title }}
                   </h1>
-                  <span class="text-shadow text-sm">{{ props.media?.subtitle }}</span>
+                  <span v-if="props.media?.subtitle" class="backdrop-card-subtitle">{{ props.media?.subtitle }}</span>
                 </VCardText>
               </template>
             </VImg>
@@ -117,9 +140,42 @@ const getImgUrl = computed(() => {
   inline-size: 100%;
 }
 
+.backdrop-card--loaded {
+  border: 1px solid var(--mp-border);
+}
+
 .backdrop-card-image {
   block-size: 100%;
   inline-size: 100%;
+}
+
+.backdrop-card-overlay {
+  background: var(--mp-media-scrim);
+  color: var(--mp-on-media);
+  padding-block-start: 2rem;
+}
+
+.backdrop-card-title {
+  inline-size: 100%;
+  min-inline-size: 0;
+  color: var(--mp-on-media);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  text-wrap: wrap;
+}
+
+.backdrop-card-subtitle {
+  inline-size: 100%;
+  color: var(--mp-on-media-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+  text-wrap: wrap;
 }
 
 .backdrop-card-placeholder,

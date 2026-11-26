@@ -393,12 +393,28 @@ const NoDataFoundStub = defineComponent({
 const InfiniteScrollStub = defineComponent({
   name: 'VInfiniteScroll',
   emits: ['load'],
-  /** 通过按钮触发下一页加载并保留完成回调。 */
+  /** 复刻 VInfiniteScroll 在 done('empty') 后锁定结束状态、需重挂才恢复加载的契约。 */
   setup(_props, { emit, slots }) {
+    let status: 'ok' | 'empty' | 'loading' | 'error' = 'ok'
+    const done = (nextStatus: 'ok' | 'empty' | 'loading' | 'error') => {
+      status = nextStatus
+      mocks.infiniteDone(nextStatus)
+    }
+
     return () =>
       h('section', [
         slots.default?.(),
-        h('button', { onClick: () => emit('load', { done: mocks.infiniteDone }), type: 'button' }, 'load-more-market'),
+        h(
+          'button',
+          {
+            onClick: () => {
+              if (status === 'empty' || status === 'loading') return
+              emit('load', { done })
+            },
+            type: 'button',
+          },
+          'load-more-market',
+        ),
       ])
   },
 })
@@ -525,10 +541,10 @@ function registerListHandlers(responses: ListResponses = {}) {
 }
 
 /** 挂载插件页面，注入权限和轻量 UI 替身。 */
-async function renderList(responses: ListResponses = {}, options: { superUser?: boolean } = {}) {
+async function renderList(responses: ListResponses = {}, options: { superUser?: boolean; initialRoute?: string } = {}) {
   registerListHandlers(responses)
   return renderWithProviders(PluginCardListView, {
-    initialRoute: '/plugins',
+    initialRoute: options.initialRoute ?? '/plugins',
     initialState: {
       user: {
         permissions: DEFAULT_PERMISSIONS,
@@ -1218,6 +1234,63 @@ describe('PluginCardListView market filtering and pagination', () => {
     await waitForRequestsToFinish()
   })
 
+  it('restores market pagination after clearing a filter that exhausted infinite scroll, and avoids wrapping filter selects in VListItem', async () => {
+    const market = Array.from({ length: 45 }, (_, index) =>
+      createPlugin({
+        id: `Market-${index}`,
+        plugin_author: index < 2 ? 'cwd0204' : 'Alice',
+        plugin_name: `市场插件 ${String(index).padStart(2, '0')}`,
+        repo_url: 'https://github.com/example/repo',
+      }),
+    )
+    await renderList({
+      market: () => market,
+      statistic: () => Object.fromEntries(market.map((plugin, index) => [plugin.id, 100 - index])),
+    })
+    getHeaderConfig().modelValue.value = 'market'
+    await nextTick()
+    await waitFor(() => expect(document.querySelectorAll('[data-testid^="market-"]')).toHaveLength(20))
+
+    const marketFilterButton = getHeaderConfig().appendButtons.find(button => button.dataAttr === 'market-filter-btn')
+    if (!marketFilterButton?.action) throw new Error('未注册市场过滤操作')
+    marketFilterButton.action()
+    await nextTick()
+
+    const authorGroup = screen.getByRole('group', { name: '作者' })
+    expect(authorGroup.closest('.market-filter-options-list__controls')).not.toBeNull()
+    expect(authorGroup.closest('.v-list-item')).toBeNull()
+
+    // 筛选到少于单页的 2 个插件并触发 VInfiniteScroll 锁定 empty 状态
+    await fireEvent.click(within(authorGroup).getByRole('button', { name: 'cwd0204' }))
+    await waitFor(() => expect(document.querySelectorAll('[data-testid^="market-"]')).toHaveLength(2))
+    await fireEvent.click(screen.getByRole('button', { name: 'load-more-market' }))
+    expect(mocks.infiniteDone).toHaveBeenLastCalledWith('empty')
+
+    // 清除作者筛选后，先恢复首批 20 个插件，并解除 empty 锁定以继续分页加载全部 45 个插件
+    await fireEvent.click(within(authorGroup).getByRole('button', { name: 'cwd0204' }))
+    await waitFor(() => expect(document.querySelectorAll('[data-testid^="market-"]')).toHaveLength(20))
+
+    await fireEvent.click(screen.getByRole('button', { name: 'load-more-market' }))
+    await waitFor(() => expect(document.querySelectorAll('[data-testid^="market-"]')).toHaveLength(40))
+    expect(mocks.infiniteDone).toHaveBeenLastCalledWith('ok')
+
+    await fireEvent.click(screen.getByRole('button', { name: 'load-more-market' }))
+    await waitFor(() => expect(document.querySelectorAll('[data-testid^="market-"]')).toHaveLength(45))
+    expect(mocks.infiniteDone).toHaveBeenLastCalledWith('ok')
+
+    // 全部展开后触底，手动刷新市场回到第一页时同样应解除 empty 锁定
+    await fireEvent.click(screen.getByRole('button', { name: 'load-more-market' }))
+    expect(mocks.infiniteDone).toHaveBeenLastCalledWith('empty')
+
+    getHeaderButton('mdi-refresh').action?.()
+    await waitFor(() => expect(document.querySelectorAll('[data-testid^="market-"]')).toHaveLength(20))
+    await waitForRequestsToFinish()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'load-more-market' }))
+    await waitFor(() => expect(document.querySelectorAll('[data-testid^="market-"]')).toHaveLength(40))
+    expect(mocks.infiniteDone).toHaveBeenLastCalledWith('ok')
+  })
+
   it('preserves loaded market pages when switching tabs without refetching', async () => {
     const market = Array.from({ length: 45 }, (_, index) =>
       createPlugin({
@@ -1405,6 +1478,25 @@ describe('PluginCardListView installed filtering and host callbacks', () => {
 
     await waitFor(() => expect(screen.getByLabelText('page-open-Beta')).toHaveTextContent('true'))
     expect(document.querySelector('[data-scroll-to-index]')).toHaveAttribute('data-scroll-to-index', '1')
+    await waitForRequestsToFinish()
+  })
+
+  it('opens the route target as soon as installed plugins load without waiting for the market', async () => {
+    const market = createDeferred<Plugin[]>()
+    await renderList(
+      {
+        installed: () => [createPlugin({ id: 'Beta', installed: true, plugin_name: 'Beta' })],
+        market: () => market.promise,
+      },
+      { initialRoute: '/plugins?id=Beta' },
+    )
+
+    await waitFor(() => expect(screen.getByLabelText('page-open-Beta')).toHaveTextContent('true'))
+    expect(screen.queryByText(/^market:/)).not.toBeInTheDocument()
+
+    market.resolve([createPlugin({ id: 'Market', plugin_name: '市场插件' })])
+    expect(await screen.findByText('market:市场插件')).toBeInTheDocument()
+    expect(screen.getByLabelText('page-open-Beta')).toHaveTextContent('true')
     await waitForRequestsToFinish()
   })
 

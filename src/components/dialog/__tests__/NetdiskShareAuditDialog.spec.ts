@@ -1,4 +1,4 @@
-﻿import NetdiskShareAuditDialog from '@/components/dialog/NetdiskShareAuditDialog.vue'
+import NetdiskShareAuditDialog from '@/components/dialog/NetdiskShareAuditDialog.vue'
 import { screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { server } from '@tests/support/msw/server'
@@ -70,9 +70,7 @@ function auditResponse() {
           episodes: [],
           missing_episodes: [9, 10, 11, 12],
           existing_episodes: [1, 2, 3, 4, 5, 6, 7, 8],
-          season_gaps: [
-            { season: 1, missing_episodes: [9, 10, 11, 12], existing_episodes: [1, 2, 3, 4, 5, 6, 7, 8] },
-          ],
+          season_gaps: [{ season: 1, missing_episodes: [9, 10, 11, 12], existing_episodes: [1, 2, 3, 4, 5, 6, 7, 8] }],
           library_evidence: 'media_server',
           library_state: 'present',
           truncated: false,

@@ -6,7 +6,7 @@ import AgentAssistantPanel from '@/components/agent/AgentAssistantPanel.vue'
 const displayState = vi.hoisted(() => ({ mdAndDown: { value: true } }))
 const identityState = vi.hoisted(() => ({
   auth: null as unknown as { token: string | null },
-  user: null as unknown as { getUserName: string; getUserID: number },
+  user: null as unknown as { getUserName: string; getUserID: number; superUser: boolean },
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -20,7 +20,7 @@ vi.mock('vuetify', () => ({
 vi.mock('@/stores', async () => {
   const { reactive } = await import('vue')
   identityState.auth = reactive({ token: 'account-a-token' })
-  identityState.user = reactive({ getUserName: 'Tester', getUserID: 42 })
+  identityState.user = reactive({ getUserName: 'Tester', getUserID: 42, superUser: false })
   return {
     useAuthStore: () => identityState.auth,
     useUserStore: () => identityState.user,
@@ -197,6 +197,7 @@ function mountPanel(props: Record<string, unknown> = {}) {
         AgentMarkdownContent: agentMarkdownContentStub,
         IconBtn: { template: '<button><slot /></button>' },
         PerfectScrollbar: { template: '<div><slot /></div>' },
+        VAlert: { template: '<div class="v-alert-stub"><slot /></div>' },
         VCard: slotContainerStub,
         VInfiniteScroll: slotContainerStub,
         VIcon: true,
@@ -214,6 +215,7 @@ describe('AgentAssistantPanel stream recovery', () => {
     identityState.auth.token = 'account-a-token'
     identityState.user.getUserID = 42
     identityState.user.getUserName = 'Tester'
+    identityState.user.superUser = false
   })
 
   afterEach(() => {
@@ -2868,6 +2870,7 @@ describe('AgentAssistantPanel agent host bridge', () => {
     identityState.auth.token = 'account-a-token'
     identityState.user.getUserID = 42
     identityState.user.getUserName = 'Tester'
+    identityState.user.superUser = false
   })
 
   afterEach(() => {
@@ -3503,4 +3506,92 @@ describe('AgentAssistantPanel agent host bridge', () => {
       wrapper.unmount()
     },
   )
+
+  it('sends log diagnostics through the ordinary chat stream and keeps the user draft', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/message/agent/stream') && init?.method === 'POST') {
+        return createAgentStreamResponse([legacySseFrame({ type: 'done' })])
+      }
+      return createAgentResponse([])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mountPanel()
+    await wrapper.get('textarea').setValue('尚未发送的草稿')
+
+    await (wrapper.vm as unknown as { startDiagnostic: (prompt: string) => Promise<void> }).startDiagnostic(
+      '分析 moviepilot.log',
+    )
+    await flushPromises()
+
+    const request = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/message/agent/stream'))
+    const body = JSON.parse(String(request?.[1]?.body))
+    expect(body).toMatchObject({ text: '分析 moviepilot.log' })
+    expect(body).not.toHaveProperty('diagnostic')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('尚未发送的草稿')
+
+    wrapper.unmount()
+  })
+
+  it('refuses log diagnostics while a run is active instead of steering into it', async () => {
+    const stream = createControllableAgentStream()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/message/agent/stream') && init?.method === 'POST') return stream.response
+      return createAgentResponse([])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mountPanel()
+    await wrapper.get('textarea').setValue('正在分析的问题')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+
+    await (wrapper.vm as unknown as { startDiagnostic: (prompt: string) => Promise<void> }).startDiagnostic(
+      '分析插件日志',
+    )
+    await flushPromises()
+
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/message/agent/stream'))).toHaveLength(1)
+    expect(wrapper.text()).toContain('agentAssistant.diagnosticBusy')
+
+    stream.emit(legacySseFrame({ type: 'done' }))
+    stream.close()
+    await flushPromises()
+    wrapper.unmount()
+  })
+
+  it('skips loading admin slash commands for regular users and loads them for superusers', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/message/agent/commands')) {
+        return createAgentResponse([{ command: '/restart', description: '重启系统' }])
+      }
+      return createAgentResponse([])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    identityState.user.superUser = false
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('/r')
+    await textarea.trigger('input')
+    await flushPromises()
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/message/agent/commands'))).toBe(false)
+    expect(wrapper.find('.agent-assistant-commands').exists()).toBe(false)
+    expect(wrapper.find('.agent-assistant-error').exists()).toBe(false)
+
+    identityState.user.superUser = true
+    await textarea.setValue('/re')
+    await textarea.trigger('input')
+    await flushPromises()
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/message/agent/commands'))).toBe(true)
+    expect(wrapper.text()).toContain('/restart')
+
+    identityState.user.superUser = false
+    await flushPromises()
+    expect(wrapper.find('.agent-assistant-commands').exists()).toBe(false)
+    wrapper.unmount()
+  })
 })

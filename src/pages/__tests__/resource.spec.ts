@@ -568,7 +568,9 @@ describe('resource page search flow', () => {
     expect(screen.queryByRole('status', { name: '本页搜索情况' })).not.toBeInTheDocument()
     source.message({ type: 'done', diagnostics: createSearchDiagnostics() })
     source.fail()
-    expect(await screen.findByRole('status', { name: '本页搜索情况' })).toHaveTextContent('规则“中文字幕”未应用')
+    const panel = await screen.findByRole('status', { name: '本页搜索情况' })
+    expect(panel).toHaveTextContent('候选 0 · 保留 0')
+    expect(panel).not.toHaveTextContent('规则“中文字幕”未应用')
   })
 
   it('restores optional diagnostics with the matching remembered results', async () => {
@@ -1111,6 +1113,55 @@ describe('resource page search flow', () => {
     expect(await screen.findByText('待确认资源')).toBeInTheDocument()
   })
 
+  it('keeps rejected music candidates visible with their manual review mode', async () => {
+    await renderResource({
+      path: '/resource',
+      query: { keyword: '音乐拒绝候选', result_type: 'torrent', type: '音乐' },
+    })
+    const rejected = createTorrent({ title: '被拒但可人工确认的资源' })
+    rejected.meta_info.type = '音乐'
+    rejected.match_status = 'candidate'
+    rejected.match_reason = 'title_mismatch'
+    finishStream(await latestEventSource(), [rejected])
+
+    expect(await screen.findByText('被拒但可人工确认的资源')).toBeInTheDocument()
+    await fireEvent.click(screen.getByRole('tab', { name: /^精确匹配$/ }))
+    const emptyState = await screen.findByTestId('resource-empty-state')
+    expect(emptyState).toHaveTextContent('找到 1 个音乐候选，但没有通过身份匹配')
+    expect(emptyState).toHaveTextContent('切换到“待确认”查看候选资源及匹配原因。')
+    await fireEvent.click(screen.getByRole('tab', { name: /^待确认$/ }))
+    expect(await screen.findByText('被拒但可人工确认的资源')).toBeInTheDocument()
+  })
+
+  it('describes music identity matching when an older backend returns only rejected counts', async () => {
+    await renderResource({ path: '/resource', query: { keyword: '2026 原音精选', type: '音乐' } })
+    const source = await latestEventSource()
+    source.message({ type: 'replace', items: [], candidate_items: 15, total_items: 0, value: 100 })
+    source.message({ type: 'done' })
+    source.fail()
+
+    const emptyState = await screen.findByTestId('resource-empty-state')
+    expect(emptyState).toHaveTextContent('找到 15 个音乐候选，但没有通过身份匹配')
+    expect(emptyState).not.toHaveTextContent('过滤规则')
+  })
+
+  it('keeps the filter explanation when music candidates were actually filtered before matching', async () => {
+    await renderResource({ path: '/resource', query: { keyword: '音质不符', type: '音乐' } })
+    const source = await latestEventSource()
+    source.message({
+      type: 'replace',
+      items: [],
+      candidate_items: 2,
+      total_items: 0,
+      match_counts: { filter_params: 2 },
+      value: 100,
+    })
+    source.message({ type: 'done' })
+    source.fail()
+
+    expect(await screen.findByTestId('resource-empty-state')).toHaveTextContent('找到 2 个资源，但均不符合过滤规则')
+  })
+
   it.each([
     {
       item: createTorrent({ title: '流式资源预览' }),
@@ -1235,6 +1286,22 @@ describe('resource page search flow', () => {
     source.fail()
 
     expect(await screen.findByTestId('resource-empty-state')).toHaveTextContent('找到 5 个资源，但均不符合过滤规则')
+  })
+
+  it('distinguishes an invalid rule configuration from candidates that simply do not match', async () => {
+    await renderResource({ path: '/resource', query: { keyword: '旧规则搜索', result_type: 'torrent' } })
+    const source = await latestEventSource()
+    const diagnostics = createSearchDiagnostics()
+    diagnostics.stage_counts = { candidates: 146, retained: 0 }
+    diagnostics.warnings = [{ code: 'rule_id_invalid', rule_group: '国产剧', rule_ids: [' Pre Candidate'] }]
+    source.message({ type: 'replace', stage: 'filtered', items: [], candidate_items: 146, total_items: 0, value: 100 })
+    source.message({ type: 'done', stage: 'done', diagnostics })
+    source.fail()
+    const empty = await screen.findByTestId('resource-empty-state')
+    expect(empty).toHaveTextContent('发现过滤规则配置异常')
+    expect(empty).toHaveTextContent('修复规则 ID 或规则组表达式')
+    expect(empty).not.toHaveTextContent('均不符合过滤规则')
+    expect(screen.getByRole('status', { name: '本页搜索情况' })).toHaveTextContent('" Pre Candidate"')
   })
 
   it.each([false, true])(

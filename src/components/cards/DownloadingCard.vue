@@ -72,7 +72,9 @@ const shareHref = computed(() => {
 })
 const secondaryTitleText = computed(() => netdiskSourceText.value || String(props.info?.title || '').trim())
 // 未识别任务的主标题会回退到种子名/分享码，此时不再重复展示同一行。
-const showSecondaryTitle = computed(() => Boolean(secondaryTitleText.value) && secondaryTitleText.value !== mediaTitle.value)
+const showSecondaryTitle = computed(
+  () => Boolean(secondaryTitleText.value) && secondaryTitleText.value !== mediaTitle.value,
+)
 
 const episodeText = computed(() => {
   const recognizedEpisode = [media.value.season, media.value.episode].filter(Boolean).join(' ')
@@ -140,11 +142,13 @@ const hasUploadSpeed = computed(() => Number.parseFloat(props.info?.upspeed || '
 
 // 下载状态跟随轮询数据变化，操作成功时也会立即响应。
 const isDownloading = ref(props.info?.state === 'downloading')
-const taskState = computed(() => String(props.info?.state || '').trim().toLowerCase())
-const isFailed = computed(() => !isDownloading.value && taskState.value === 'error')
-const isCompleted = computed(
-  () => !isDownloading.value && ['completed', 'transferred'].includes(taskState.value),
+const taskState = computed(() =>
+  String(props.info?.state || '')
+    .trim()
+    .toLowerCase(),
 )
+const isFailed = computed(() => !isDownloading.value && taskState.value === 'error')
+const isCompleted = computed(() => !isDownloading.value && ['completed', 'transferred'].includes(taskState.value))
 const stateColor = computed(() =>
   isDownloading.value ? 'info' : isFailed.value ? 'error' : isCompleted.value ? 'success' : 'warning',
 )
@@ -282,7 +286,10 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
             v-native-card-menu="nativeCardMenu"
             :key="props.info?.hash"
             class="downloading-card h-full overflow-hidden"
-            :class="{ 'downloading-card--no-image': !hasPosterImage }"
+            :class="{
+              'downloading-card--no-image': !hasPosterImage,
+              'downloading-card--paused': !isDownloading,
+            }"
           >
             <div v-if="hasPosterImage" class="downloading-card__poster">
               <VImg
@@ -300,28 +307,36 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
             </div>
 
             <VCardText class="downloading-card__body">
-              <div class="downloading-card__heading">
-                <div class="downloading-card__title" :title="mediaTitle">
-                  <span class="downloading-card__title-text">{{ mediaTitle }}</span>
-                  <span v-if="titleMetaText" class="downloading-card__title-meta">{{ titleMetaText }}</span>
+              <div
+                class="downloading-card__heading"
+                :class="{ 'downloading-card__heading--no-image': !hasPosterImage }"
+              >
+                <div v-if="!hasPosterImage" class="downloading-card__type-badge" aria-hidden="true">
+                  <VIcon :icon="mediaTypeIcon" size="18" />
                 </div>
-                <div v-if="showSecondaryTitle" class="downloading-card__torrent-title" :title="secondaryTitleText">
-                  <template v-if="netdiskSourceText">
-                    <span class="downloading-card__share-platform">{{ netdiskPlatformText }}</span>
-                    <template v-if="netdiskShareCode">
-                      <a
-                        v-if="shareHref"
-                        class="downloading-card__share-link"
-                        :href="shareHref"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        @click.stop
-                        >{{ netdiskShareCode }}</a
-                      >
-                      <template v-else>{{ netdiskShareCode }}</template>
+                <div class="downloading-card__heading-main">
+                  <div class="downloading-card__title" :title="mediaTitle">
+                    <span class="downloading-card__title-text">{{ mediaTitle }}</span>
+                    <span v-if="titleMetaText" class="num downloading-card__title-meta">{{ titleMetaText }}</span>
+                  </div>
+                  <div v-if="showSecondaryTitle" class="downloading-card__torrent-title" :title="secondaryTitleText">
+                    <template v-if="netdiskSourceText">
+                      <span class="downloading-card__share-platform">{{ netdiskPlatformText }}</span>
+                      <template v-if="netdiskShareCode">
+                        <a
+                          v-if="shareHref"
+                          class="downloading-card__share-link"
+                          :href="shareHref"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          @click.stop
+                          >{{ netdiskShareCode }}</a
+                        >
+                        <template v-else>{{ netdiskShareCode }}</template>
+                      </template>
                     </template>
-                  </template>
-                  <template v-else>{{ secondaryTitleText }}</template>
+                    <template v-else>{{ secondaryTitleText }}</template>
+                  </div>
                 </div>
               </div>
 
@@ -331,7 +346,7 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                   {{ mediaTypeText }}
                 </span>
                 <span v-if="mediaTypeText" aria-hidden="true" class="downloading-card__meta-separator">·</span>
-                <span class="downloading-card__meta-item downloading-card__meta-size">{{ sizeText }}</span>
+                <span class="num downloading-card__meta-item downloading-card__meta-size">{{ sizeText }}</span>
                 <template v-if="sourceSiteText">
                   <span aria-hidden="true" class="downloading-card__meta-separator">·</span>
                   <span class="downloading-card__meta-item downloading-card__meta-source" :title="sourceSiteText">
@@ -366,27 +381,27 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                       :class="{ 'downloading-card__speed--idle': !hasDownloadSpeed }"
                     >
                       <VIcon icon="mdi-arrow-down" size="14" />
-                      <strong :title="downloadSpeedText">{{ downloadSpeedText }}</strong>
+                      <strong class="num" :title="downloadSpeedText">{{ downloadSpeedText }}</strong>
                     </div>
                     <div
                       class="downloading-card__speed downloading-card__speed--upload"
                       :class="{ 'downloading-card__speed--idle': !hasUploadSpeed }"
                     >
                       <VIcon icon="mdi-arrow-up" size="14" />
-                      <strong :title="uploadSpeedText">{{ uploadSpeedText }}</strong>
+                      <strong class="num" :title="uploadSpeedText">{{ uploadSpeedText }}</strong>
                     </div>
                   </div>
-                  <strong class="downloading-card__progress-value">{{ progressText }}</strong>
+                  <strong class="num downloading-card__progress-value">{{ progressText }}</strong>
                 </div>
                 <VProgressLinear
                   :aria-label="stateText"
                   :model-value="progressValue"
                   :color="stateColor"
-                  bg-color="surface-variant"
+                  :bg-color="stateColor"
+                  bg-opacity="0.16"
                   height="4"
                   rounded
                 />
-
                 <div class="downloading-card__footer">
                   <div class="downloading-card__progress-copy">
                     <span class="downloading-card__progress-state">
@@ -395,7 +410,7 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                     </span>
                     <span
                       v-if="remainingTimeText"
-                      class="downloading-card__progress-remaining"
+                      class="num downloading-card__progress-remaining"
                       :title="remainingTimeText"
                     >
                       {{ remainingTimeText }}
@@ -420,6 +435,7 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                     </VBtn>
                     <VBtn
                       :aria-label="t('downloading.settings.title')"
+                      class="downloading-card__secondary-action"
                       :disabled="Boolean(pendingAction) || !props.info?.hash"
                       icon
                       size="small"
@@ -431,8 +447,7 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                     </VBtn>
                     <VBtn
                       :aria-label="t('common.delete')"
-                      class="downloading-card__delete-action"
-                      color="on-surface"
+                      class="downloading-card__secondary-action downloading-card__delete-action"
                       :disabled="pendingAction === 'toggle' || deleteConfirmationPending"
                       :loading="pendingAction === 'delete'"
                       icon
@@ -479,12 +494,21 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
 .downloading-card {
   --downloading-card-poster-width: 6rem;
   --downloading-card-height: 9rem;
+  --downloading-card-status-color: rgb(var(--v-theme-info));
+  --downloading-card-status-soft: var(--mp-info-soft);
+  --downloading-card-status-border: var(--mp-info-border);
 
   display: grid;
   block-size: auto;
   min-block-size: var(--downloading-card-height);
-  color: rgb(var(--v-theme-on-surface));
+  color: var(--mp-fg);
   grid-template-columns: var(--downloading-card-poster-width) minmax(0, 1fr);
+}
+
+.downloading-card--paused {
+  --downloading-card-status-color: rgb(var(--v-theme-warning));
+  --downloading-card-status-soft: var(--mp-warning-soft);
+  --downloading-card-status-border: var(--mp-warning-border);
 }
 
 .downloading-card.downloading-card--no-image {
@@ -494,7 +518,7 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
 .downloading-card__poster {
   position: relative;
   overflow: hidden;
-  background: rgba(var(--v-theme-on-surface), 0.06);
+  background: var(--mp-muted);
 }
 
 .downloading-card__image,
@@ -510,7 +534,8 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
 
 .downloading-card__poster-edge {
   position: absolute;
-  background: linear-gradient(90deg, rgba(var(--v-theme-surface), 0) 72%, rgba(var(--v-theme-surface), 0.38));
+  border-inline-end: 1px solid var(--mp-border-subtle);
+  background: linear-gradient(90deg, transparent 74%, rgba(0, 0, 0, 0.14) 100%);
   inset: 0;
   pointer-events: none;
 }
@@ -519,35 +544,63 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   display: flex;
   min-inline-size: 0;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.625rem 0.75rem !important;
+  gap: 0.25rem;
+  padding: 0.75rem 0.875rem !important;
+}
+
+.downloading-card--no-image .downloading-card__body {
+  padding: 0.875rem 1rem !important;
 }
 
 .downloading-card__heading {
   min-inline-size: 0;
 }
 
+.downloading-card__heading--no-image {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.downloading-card__heading-main {
+  min-inline-size: 0;
+  flex: 1 1 auto;
+}
+
+.downloading-card__type-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--downloading-card-status-border);
+  border-radius: calc(var(--app-control-radius, 12px) * 0.75);
+  background: var(--downloading-card-status-soft);
+  block-size: 2.125rem;
+  color: var(--downloading-card-status-color);
+  inline-size: 2.125rem;
+}
+
 .downloading-card__title {
   display: flex;
   min-inline-size: 0;
   align-items: baseline;
-  gap: 0.35rem;
+  gap: 0.375rem;
   line-height: 1.3;
 }
 
 .downloading-card__title-text {
   overflow: hidden;
   min-inline-size: 0;
-  color: rgb(var(--v-theme-on-surface));
+  color: var(--mp-fg);
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .downloading-card__title-meta {
   flex: 0 0 auto;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  color: var(--mp-muted-fg);
   font-size: 0.75rem;
   font-weight: 500;
   white-space: nowrap;
@@ -556,8 +609,8 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
 .downloading-card__torrent-title {
   overflow: hidden;
   margin-block-start: 0.125rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.72rem;
+  color: var(--mp-muted-fg);
+  font-size: 0.75rem;
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -571,12 +624,12 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
 
 .downloading-card__share-link:hover,
 .downloading-card__share-link:focus-visible {
-  color: rgb(var(--v-theme-primary));
+  color: var(--mp-primary-fg);
 }
 
 .downloading-card__error {
   overflow: hidden;
-  color: rgb(var(--v-theme-error));
+  color: var(--mp-destructive-fg);
   font-size: 0.72rem;
   line-height: 1.4;
   text-overflow: ellipsis;
@@ -587,8 +640,8 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   display: flex;
   min-inline-size: 0;
   align-items: center;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.72rem;
+  color: var(--mp-muted-fg);
+  font-size: 0.75rem;
   gap: 0.35rem;
   line-height: 1.35;
   white-space: nowrap;
@@ -607,9 +660,13 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   flex: 0 0 auto;
 }
 
+.downloading-card__meta-separator {
+  color: var(--mp-faint);
+}
+
 .downloading-card__meta-type {
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  font-weight: 600;
+  color: var(--mp-fg);
+  font-weight: 500;
 }
 
 .downloading-card__meta-source {
@@ -622,7 +679,7 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   display: flex;
   min-inline-size: 0;
   align-items: center;
-  color: rgb(var(--v-theme-warning));
+  color: var(--mp-warning-fg);
   font-size: 0.72rem;
   font-weight: 600;
   gap: 0.25rem;
@@ -646,13 +703,7 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   flex-direction: column;
   // 标题与元信息靠上、进度区靠下，信息较少的卡片只在中间留白，不会把各行均匀拉散。
   margin-block-start: auto;
-  gap: 0.3rem;
-
-  --downloading-card-status-color: rgb(var(--v-theme-info));
-}
-
-.downloading-card__progress--paused {
-  --downloading-card-status-color: rgb(var(--v-theme-warning));
+  gap: 0.35rem;
 }
 
 .downloading-card__progress--failed {
@@ -675,14 +726,17 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
 .downloading-card__footer {
   // 窄卡片或放大字体下让按钮整体换行，不把剩余时间挤成单个字符。
   flex-wrap: wrap;
+  border-block-start: 1px solid var(--mp-border-subtle);
+  margin-block-start: 0.125rem;
+  padding-block-start: 0.3rem;
 }
 
 .downloading-card__progress-value {
   flex: 0 0 auto;
   color: var(--downloading-card-status-color);
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .downloading-card__speeds {
@@ -702,29 +756,29 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
 
 .downloading-card__speed strong {
   overflow: hidden;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.72rem;
+  color: var(--mp-muted-fg);
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .downloading-card__speed--download .v-icon {
-  color: rgb(var(--v-theme-info));
+  color: var(--mp-info-fg);
 }
 
 .downloading-card__speed--download strong {
-  color: rgb(var(--v-theme-on-surface));
-  font-weight: 700;
+  color: var(--mp-fg);
+  font-weight: 600;
 }
 
 .downloading-card__speed--upload .v-icon {
-  color: rgb(var(--v-theme-success));
+  color: var(--mp-success-fg);
 }
 
 .downloading-card__speed--idle {
-  opacity: 0.52;
+  opacity: 0.48;
 }
 
 .downloading-card__progress-copy {
@@ -733,9 +787,9 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   flex: 1 1 5.5rem;
   flex-direction: column;
   align-items: flex-start;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.72rem;
-  gap: 0.15rem;
+  color: var(--mp-muted-fg);
+  font-size: 0.75rem;
+  gap: 0.125rem;
   line-height: 1.3;
 }
 
@@ -744,7 +798,7 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   flex: 0 0 auto;
   align-items: center;
   color: var(--downloading-card-status-color);
-  font-weight: 650;
+  font-weight: 600;
   gap: 0.2rem;
 }
 
@@ -771,14 +825,18 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   font-size: 1.125rem;
 }
 
-.downloading-card__delete-action {
-  opacity: var(--v-medium-emphasis-opacity);
+.downloading-card__secondary-action {
+  color: var(--mp-muted-fg) !important;
+}
+
+.downloading-card__secondary-action:hover,
+.downloading-card__secondary-action:focus-visible {
+  color: var(--mp-fg) !important;
 }
 
 .downloading-card__delete-action:hover,
 .downloading-card__delete-action:focus-visible {
-  color: rgb(var(--v-theme-error)) !important;
-  opacity: 1;
+  color: var(--mp-destructive-fg) !important;
 }
 
 @container (width <= 21rem) {

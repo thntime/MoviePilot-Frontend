@@ -40,6 +40,7 @@ import { resolvePluginInstallBlock } from '@/composables/usePluginInstallBlock'
 import { buildUserPermissionContext, hasPermission } from '@/utils/permission'
 import type { NativePanelSource } from '@/native/registry'
 import { nativePanelId } from '@/native/panel'
+import { nativeChromeActive } from '@/native/layout'
 
 // 国际化
 const { t } = useI18n()
@@ -243,6 +244,17 @@ const sortedUninstalledList = ref<Plugin[]>([])
 const marketPageSize = 20
 const marketVisibleCount = ref(marketPageSize)
 const displayUninstalledList = computed(() => sortedUninstalledList.value.slice(0, marketVisibleCount.value))
+// VInfiniteScroll 收到 done('empty') 后会锁定结束状态，筛选放宽或刷新重新出现更多条目时通过重挂恢复滚动加载。
+const marketInfiniteScrollKey = ref(0)
+let marketInfiniteExhausted = false
+
+/** 市场列表重新出现未展开条目时重挂无限滚动容器，解除先前的 empty 锁定。 */
+function resetMarketInfiniteScrollIfNeeded() {
+  if (marketInfiniteExhausted && marketVisibleCount.value < sortedUninstalledList.value.length) {
+    marketInfiniteExhausted = false
+    marketInfiniteScrollKey.value += 1
+  }
+}
 
 // 两个标签共用页面滚动条，切换时分别保存和恢复各自的位置。
 const tabScrollPositions: Record<'installed' | 'market', number> = {
@@ -442,7 +454,7 @@ function nativeMarketFilterPanel(): NativePanelSource {
   })
   return {
     title: t('common.filter'),
-    search: { text: filterForm.name, placeholder: t('plugin.name') },
+    search: { text: filterForm.name || '', placeholder: t('plugin.name') },
     onQuery: value => {
       filterForm.name = value
     },
@@ -1565,8 +1577,13 @@ function applyPluginRating(pluginRating: PluginRating) {
 }
 
 // 加载所有数据
-async function refreshData(context: KeepAliveRefreshContext = {}) {
+/**
+ * 依次刷新已安装列表、市场列表、统计与文件夹。
+ * @param onInstalledReady 已安装列表就绪后立即执行的回调；深链打开目标插件只依赖已安装数据，不必等待远程市场请求。
+ */
+async function refreshData(context: KeepAliveRefreshContext = {}, onInstalledReady?: () => Promise<void>) {
   await fetchInstalledPlugins(context)
+  await onInstalledReady?.()
   await fetchUninstalledPlugins(false, context)
   await getPluginMarketMetrics()
   // 重新加载文件夹配置，确保分身插件能正确显示在文件夹中
@@ -1673,6 +1690,7 @@ watch([marketList, filterForm, activeSort, PluginStatistics, PluginRatings], () 
     marketPageSize,
     Math.min(marketVisibleCount.value, sortedUninstalledList.value.length),
   )
+  resetMarketInfiniteScrollIfNeeded()
 })
 
 // 新安装了插件
@@ -1757,10 +1775,12 @@ watch([dataList, installedFilter, hasUpdateFilter, enabledFilter], () => {
 // 插件市场加载更多数据
 function loadMarketMore({ done }: { done: (status: 'ok' | 'empty' | 'loading' | 'error') => void }) {
   if (marketVisibleCount.value >= sortedUninstalledList.value.length) {
+    marketInfiniteExhausted = true
     done('empty')
     return
   }
 
+  marketInfiniteExhausted = false
   marketVisibleCount.value = Math.min(marketVisibleCount.value + marketPageSize, sortedUninstalledList.value.length)
   done('ok')
 }
@@ -1771,9 +1791,11 @@ onMounted(async () => {
   isPluginPageActive.value = true
   await loadPluginOrderConfig()
   await loadPluginFolders() // 加载文件夹配置
-  await refreshData()
-  if (userStore.superUser) await pluginRuntimeStore.refresh()
-  await revealRoutePlugin()
+  // 全局入口与原生容器带目标插件进入时，已安装列表和运行时状态就绪即打开，市场列表与统计随后补齐。
+  await refreshData({}, async () => {
+    if (userStore.superUser) await pluginRuntimeStore.refresh()
+    await revealRoutePlugin()
+  })
 })
 
 useKeepAliveRefresh(refreshActiveTabData)
@@ -2355,7 +2377,13 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
 </script>
 
 <template>
-  <div>
+  <div
+    class="plugin-card-list-view"
+    :class="{
+      'plugin-card-list-view--fab-clearance': !nativeChromeActive && !appMode,
+      'plugin-card-list-view--app-shell': !nativeChromeActive && appMode,
+    }"
+  >
     <!-- 已安装插件过滤下拉菜单 -->
     <Teleport to="body" v-if="filterInstalledPluginDialog">
       <VMenu
@@ -2446,58 +2474,58 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
             </VListItem>
           </VList>
           <!-- 下拉多选筛选项 -->
-          <VDivider />
-          <VList density="compact" class="market-filter-options-list px-2 py-1">
-            <VListSubheader>{{ t('common.filter') }}</VListSubheader>
-            <VListItem>
-              <VSelect
-                v-if="authorFilterOptions.length > 0"
-                v-model="filterForm.author"
-                :items="authorFilterOptions"
-                :label="t('plugin.author')"
-                mobile-control-width="75%"
-                multiple
-                chips
-                closable-chips
-                density="compact"
-                variant="outlined"
-                hide-details
-                clearable
-              />
-            </VListItem>
-            <VListItem>
-              <VSelect
-                v-if="labelFilterOptions.length > 0"
-                v-model="filterForm.label"
-                :items="labelFilterOptions"
-                :label="t('plugin.label')"
-                mobile-control-width="75%"
-                multiple
-                chips
-                closable-chips
-                density="compact"
-                variant="outlined"
-                hide-details
-                clearable
-              />
-            </VListItem>
-            <VListItem>
-              <VSelect
-                v-if="repoFilterOptions.length > 0"
-                v-model="filterForm.repo"
-                :items="repoFilterOptions"
-                :label="t('plugin.repository')"
-                mobile-control-width="75%"
-                multiple
-                chips
-                closable-chips
-                density="compact"
-                variant="outlined"
-                hide-details
-                clearable
-              />
-            </VListItem>
-          </VList>
+          <template
+            v-if="authorFilterOptions.length > 0 || labelFilterOptions.length > 0 || repoFilterOptions.length > 0"
+          >
+            <VDivider />
+            <VList density="compact" class="market-filter-options-list px-2 py-1">
+              <VListSubheader>{{ t('common.filter') }}</VListSubheader>
+              <div class="market-filter-options-list__controls">
+                <VSelect
+                  v-if="authorFilterOptions.length > 0"
+                  v-model="filterForm.author"
+                  :items="authorFilterOptions"
+                  :label="t('plugin.author')"
+                  mobile-control-width="75%"
+                  multiple
+                  chips
+                  closable-chips
+                  density="compact"
+                  variant="outlined"
+                  hide-details
+                  clearable
+                />
+                <VSelect
+                  v-if="labelFilterOptions.length > 0"
+                  v-model="filterForm.label"
+                  :items="labelFilterOptions"
+                  :label="t('plugin.label')"
+                  mobile-control-width="75%"
+                  multiple
+                  chips
+                  closable-chips
+                  density="compact"
+                  variant="outlined"
+                  hide-details
+                  clearable
+                />
+                <VSelect
+                  v-if="repoFilterOptions.length > 0"
+                  v-model="filterForm.repo"
+                  :items="repoFilterOptions"
+                  :label="t('plugin.repository')"
+                  mobile-control-width="75%"
+                  multiple
+                  chips
+                  closable-chips
+                  density="compact"
+                  variant="outlined"
+                  hide-details
+                  clearable
+                />
+              </div>
+            </VList>
+          </template>
         </VCard>
       </VMenu>
     </Teleport>
@@ -2576,8 +2604,8 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
                 v-else-if="shouldVirtualizeInstalledMainList"
                 :items="mixedSortList"
                 :get-item-key="item => `${item.type}:${item.id}`"
-                :min-item-width="256"
-                :estimated-item-height="180"
+                :min-item-width="264"
+                :estimated-item-height="156"
                 :scroll-to-index="installedScrollToIndex"
               >
                 <template #default="{ item }">
@@ -2649,8 +2677,8 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
                 v-else-if="shouldVirtualizeInstalledFolderList"
                 :items="draggableFolderPlugins"
                 :get-item-key="item => item.id"
-                :min-item-width="256"
-                :estimated-item-height="180"
+                :min-item-width="264"
+                :estimated-item-height="156"
               >
                 <template #default="{ item }">
                   <PluginMixedSortCard
@@ -2712,6 +2740,7 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
           <!-- 资源列表 -->
           <VInfiniteScroll
             v-if="isAppMarketLoaded && !(isMarketRefreshing && displayUninstalledList.length === 0)"
+            :key="marketInfiniteScrollKey"
             mode="intersect"
             side="end"
             :items="displayUninstalledList"
@@ -2724,8 +2753,8 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
               v-if="displayUninstalledList.length > 0"
               :items="displayUninstalledList"
               :get-item-key="item => item.id"
-              :min-item-width="256"
-              :estimated-item-height="260"
+              :min-item-width="264"
+              :estimated-item-height="156"
             >
               <template #default="{ item }">
                 <PluginAppCard
@@ -2786,10 +2815,42 @@ function onDragStartPlugin(evt: { oldIndex?: number; item?: HTMLElement }) {
 <style scoped lang="scss">
 /* stylelint-disable selector-pseudo-class-no-unknown */
 
+// 网页端末尾预留悬浮操作按钮避让高度，PWA 壳已由外层容器处理底部导航安全区，仅补轻量呼吸间距。
+.plugin-card-list-view--fab-clearance {
+  padding-block-end: var(--mp-bottom-clearance, var(--app-fab-clearance, 5.5rem));
+}
+
+.plugin-card-list-view--app-shell,
+:global(.layout-wrapper.layout-app-shell) .plugin-card-list-view--fab-clearance {
+  padding-block-end: 1rem;
+}
+
+// 避免 VList / VListItem 默认溢出裁切 outlined 浮动标签与聚焦描边，并为多选标签预留清晰间距。
+.market-filter-options-list {
+  overflow: visible;
+}
+
+.market-filter-options-list__controls {
+  display: flex;
+  flex-direction: column;
+  padding-block: 0.5rem 0.625rem;
+  padding-inline: 0.25rem;
+  gap: 0.875rem;
+}
+
+@media (width >= 960px) {
+  .market-filter-options-list__controls :deep(.v-select--chips .v-field--dirty .v-field__input) {
+    padding-block: 0.6875rem 0.375rem;
+    row-gap: 0.25rem;
+  }
+}
+
 @media (width < 960px) {
-  // 弹出菜单使用紧凑录入行，避免叠加全局移动表单高度与列表项纵向留白。
-  .market-filter-options-list :deep(.v-list-item) {
+  // 弹出菜单使用紧凑录入行，避免叠加全局移动表单高度与额外纵向留白。
+  .market-filter-options-list__controls {
     padding-block: 0;
+    padding-inline: 0.75rem;
+    gap: 0;
   }
 
   .market-filter-options-list :deep(.app-responsive-input) {

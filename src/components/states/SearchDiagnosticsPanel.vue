@@ -1,14 +1,20 @@
 <script setup lang="ts">
 import type { SearchDiagnostics } from '@/api/types'
+import { ruleConfigurationWarningCodes } from '@/utils/searchDiagnostics'
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+/** 当前完整页的搜索诊断。 */
 const props = defineProps<{ diagnostics: SearchDiagnostics }>()
 const { t } = useI18n()
 // 搜索诊断属于辅助信息，首次展示仅保留摘要，详细来源由用户主动展开。
 const expanded = ref(false)
 const detailsId = useId()
 const hasDetails = computed(() => props.diagnostics.searched_sites.length || props.diagnostics.rejection_reasons.length)
+// 多选规则按媒体类型和分类自动匹配，不适用的规则属于正常跳过，无需逐条提示。
+const visibleWarnings = computed(() =>
+  props.diagnostics.warnings.filter(warning => warning.code !== 'rule_group_not_applicable'),
+)
 const reasonCodes = new Set([
   'filter_params',
   'filter_rules',
@@ -20,7 +26,7 @@ const reasonCodes = new Set([
   'duplicate',
 ])
 const warningCodes = new Set([
-  'rule_group_not_applicable',
+  ...ruleConfigurationWarningCodes,
   'rule_group_missing',
   'provider_error',
   'provider_cooldown',
@@ -54,13 +60,14 @@ const warningCodes = new Set([
       <div v-if="expanded" :id="detailsId" class="search-diagnostics__details">
         <div v-if="diagnostics.searched_sites.length">
           <p class="search-diagnostics__label">{{ t('resource.diagnostics.sources') }}</p>
-          <ul class="search-diagnostics__list">
+          <ul class="search-diagnostics__list search-diagnostics__list--sources">
             <li v-for="(site, index) in diagnostics.searched_sites" :key="index">
               <span class="search-diagnostics__name">{{ site.site_name }}</span>
-              <span class="search-diagnostics__separator" aria-hidden="true"> — </span>
               <span class="search-diagnostics__outcome">
                 {{ t(`resource.diagnostics.${site.attempted ? site.outcome : 'notAttempted'}`) }}
-                <span v-if="site.attempted">{{ t('resource.diagnostics.rawCount', { count: site.raw_count }) }}</span>
+              </span>
+              <span v-if="site.attempted" class="search-diagnostics__count">
+                {{ t('resource.diagnostics.rawCount', { count: site.raw_count }) }}
               </span>
             </li>
           </ul>
@@ -72,19 +79,20 @@ const warningCodes = new Set([
               <span class="search-diagnostics__name">
                 {{ t(`resource.diagnostics.reasons.${reasonCodes.has(reason.code) ? reason.code : 'other'}`) }}:
               </span>
-              <span class="search-diagnostics__outcome">{{ reason.count }}</span>
+              <span class="search-diagnostics__count">{{ reason.count }}</span>
             </li>
           </ul>
         </div>
       </div>
     </VExpandTransition>
-    <div v-if="diagnostics.warnings.length" class="search-diagnostics__notes">
-      <p v-for="(warning, index) in diagnostics.warnings" :key="index" class="search-diagnostics__note">
+    <div v-if="visibleWarnings.length" class="search-diagnostics__notes">
+      <p v-for="(warning, index) in visibleWarnings" :key="index" class="search-diagnostics__note">
         <VIcon icon="mdi-information-outline" size="15" class="search-diagnostics__icon" />
         <span>
           {{
             t(`resource.diagnostics.warnings.${warningCodes.has(warning.code) ? warning.code : 'other'}`, {
               name: warning.rule_group || t('resource.diagnostics.unnamedRule'),
+              ids: warning.rule_ids?.map(id => JSON.stringify(id)).join(', ') || t('resource.diagnostics.unnamedRule'),
             })
           }}
         </span>
@@ -137,7 +145,7 @@ const warningCodes = new Set([
 
 .search-diagnostics__details {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 16px 24px;
   padding: 12px;
   border-block-start: 1px solid rgba(var(--v-theme-on-surface), 0.06);
@@ -155,11 +163,16 @@ const warningCodes = new Set([
 }
 
 .search-diagnostics__list li {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: baseline;
-  justify-content: space-between;
   gap: 12px;
   padding-block: 5px;
+}
+
+.search-diagnostics__list--sources li {
+  /* 三列使用统一宽度，避免站点名、状态或数量的字数改变其他列的位置。 */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 7.5em);
 }
 
 .search-diagnostics__list li + li {
@@ -172,7 +185,10 @@ const warningCodes = new Set([
 }
 
 .search-diagnostics__outcome {
-  max-inline-size: 65%;
+  overflow-wrap: anywhere;
+}
+
+.search-diagnostics__count {
   text-align: end;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;

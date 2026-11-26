@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <VDialog :model-value="modelValue" max-width="760" scrollable @update:model-value="emit('update:modelValue', $event)">
     <VCard>
       <VCardTitle class="d-flex align-center">
@@ -43,25 +43,21 @@
           <VBtn variant="text" @click="reset">{{ t('netdiskAudit.reset') }}</VBtn>
         </div>
 
-        <VAlert v-if="error" data-testid="netdisk-audit-error" class="mt-3" density="compact" type="error" variant="tonal">
-          {{ error }}
-        </VAlert>
         <VAlert
-          v-if="report && !report.media.length"
+          v-if="error"
+          data-testid="netdisk-audit-error"
           class="mt-3"
           density="compact"
-          type="warning"
+          type="error"
           variant="tonal"
         >
+          {{ error }}
+        </VAlert>
+        <VAlert v-if="report && !report.media.length" class="mt-3" density="compact" type="warning" variant="tonal">
           {{ t('netdiskAudit.empty') }}
         </VAlert>
 
-        <VCard
-          v-for="(media, index) in report?.media ?? []"
-          :key="index"
-          class="mt-3"
-          variant="outlined"
-        >
+        <VCard v-for="(media, index) in report?.media ?? []" :key="index" class="mt-3" variant="outlined">
           <VCardText>
             <div class="text-subtitle-1">
               {{ media.title || t('netdiskAudit.unrecognized') }}
@@ -81,13 +77,14 @@
             <template v-else-if="media.recognized">
               <div class="mt-2">{{ t('netdiskAudit.existing', { count: media.existing_episodes.length }) }}</div>
               <div v-if="media.season_gaps.length" class="mt-1">
-                <div
-                  v-for="gap in media.season_gaps"
-                  :key="gap.season"
-                  class="d-flex align-center flex-wrap ga-2 mt-1"
-                >
+                <div v-for="gap in media.season_gaps" :key="gap.season" class="d-flex align-center flex-wrap ga-2 mt-1">
                   <span>
-                    {{ t('netdiskAudit.seasonGap', { season: gap.season, episodes: formatEpisodeRanges(gap.missing_episodes) }) }}
+                    {{
+                      t('netdiskAudit.seasonGap', {
+                        season: gap.season,
+                        episodes: formatEpisodeRanges(gap.missing_episodes),
+                      })
+                    }}
                   </span>
                   <VBtn
                     size="x-small"

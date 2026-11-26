@@ -3,7 +3,7 @@ import { useDisplay } from 'vuetify'
 import { VDialog, VMenu } from 'vuetify/components'
 import { useI18n } from 'vue-i18n'
 import { useId } from 'vue'
-import { useWindowSize } from '@vueuse/core'
+import { useVisualViewportHeight } from '@/composables/useVisualViewportHeight'
 import api, { isApiResponse } from '@/api'
 import { useAuthStore, useUserStore } from '@/stores'
 import { getCurrentLocale } from '@/plugins/i18n'
@@ -416,9 +416,12 @@ const filteredSlashCommands = computed(() => {
     return haystack.includes(query)
   })
 })
+// 仅超级管理员支持加载与使用 Web 智能助手斜杠命令补全。
+const canUseSlashCommands = computed(() => Boolean(userStore.superUser))
 // 判断是否展示命令建议浮层。
 const showSlashCommandMenu = computed(
   () =>
+    canUseSlashCommands.value &&
     inputText.value.trimStart().startsWith('/') &&
     !sending.value &&
     !recording.value &&
@@ -445,7 +448,7 @@ const drawerWidth = computed(() => (display.mdAndDown.value || fullscreen.value 
 const nativeSheetActions = computed(() => nativeChromeActive.value && window.MoviePilotNative?.sheetsVersion === 1)
 // 网页窄屏由 Vuetify 管理模态层；原生 Sheet 和桌面侧栏继续沿用原内容节点。
 const mobileModal = computed(() => display.mdAndDown.value && !nativeSheetActions.value)
-const { height: visualViewportHeight } = useWindowSize({ type: 'visual' })
+const { height: visualViewportHeight } = useVisualViewportHeight()
 // 仅网页桌面宽屏展示全屏开关，App 高度由系统 Sheet 控制。
 const canToggleFullscreen = computed(() => !nativeSheetActions.value && !display.mdAndDown.value)
 const hasConversationContent = computed(() => messages.value.length > 0 || protectedDeliveries.value.length > 0)
@@ -1017,7 +1020,11 @@ async function loadMoreServerHistorySessions(options?: { done?: (status: Infinit
 
 // 加载 Web 智能助手可补全的斜杠命令列表。
 async function loadSlashCommands() {
-  if (!isAccountActive()) return
+  if (!isAccountActive() || !canUseSlashCommands.value) {
+    slashCommands.value = []
+    slashCommandsLoaded.value = false
+    return
+  }
 
   if (slashCommandsLoaded.value || slashCommandsLoading.value) return
 
@@ -1060,7 +1067,7 @@ function selectSlashCommand(command: AgentSlashCommand) {
 // 输入内容变化时同步高度，并按需预加载命令建议。
 function handleInputChange() {
   syncInputHeight()
-  if (inputText.value.trimStart().startsWith('/')) loadSlashCommands()
+  if (canUseSlashCommands.value && inputText.value.trimStart().startsWith('/')) loadSlashCommands()
 }
 
 // 处理历史菜单的无限滚动加载事件。
@@ -3353,6 +3360,36 @@ function setDraft(draft: string) {
   nextTick(() => inputRef.value?.focus())
 }
 
+/**
+ * 发送日志分析请求，供日志页「AI 诊断」入口调用；只分析、不执行修复的约束由提示词提供。
+ * 面板正在处理消息时拒绝发送：运行中的补充输入会被后端并入原会话，绕开诊断提示词约束。
+ */
+async function startDiagnostic(prompt: string) {
+  if (!isAccountActive()) return
+
+  const content = prompt.trim()
+  if (!content) return
+
+  petPickerOpen.value = false
+  if (isBusy.value || sending.value) {
+    streamError.value = t('agentAssistant.diagnosticBusy')
+    return
+  }
+
+  streamError.value = ''
+  sending.value = true
+  const requestId = ++sendingRequestId
+  try {
+    await streamAgentMessage(content, [], [], [], [])
+  } catch (error) {
+    if (!isAccountActive()) return
+    const message = error instanceof Error ? error.message : ''
+    addMessage('assistant', message || t('agentAssistant.error'), 'error')
+  } finally {
+    if (sendingRequestId === requestId) sending.value = false
+  }
+}
+
 // 处理输入框回车发送。
 function handleInputKeydown(event: KeyboardEvent) {
   if (event.key !== 'Enter' || event.shiftKey || isComposing.value || event.isComposing || event.keyCode === 229) return
@@ -3400,7 +3437,18 @@ function disposeAccountSession() {
   sending.value = false
   historyMenuOpen.value = false
   petPickerOpen.value = false
+  slashCommands.value = []
+  slashCommandsLoaded.value = false
+  slashCommandsLoading.value = false
 }
+
+watch(canUseSlashCommands, allowed => {
+  if (!allowed) {
+    slashCommands.value = []
+    slashCommandsLoaded.value = false
+    slashCommandsLoading.value = false
+  }
+})
 
 watch(
   () => [authStore.token, userStore.getUserID],
@@ -3455,7 +3503,7 @@ onMounted(() => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
-defineExpose({ setDraft })
+defineExpose({ setDraft, startDiagnostic })
 
 onScopeDispose(clearAgentAssistantOpenState)
 onScopeDispose(() => {
@@ -3701,7 +3749,7 @@ onScopeDispose(() => {
             <div v-if="!hasConversationContent" class="agent-assistant-empty">
               <div class="agent-assistant-empty__mark">
                 <AgentPetAvatar :pet="props.pet" size="3.5rem">
-                  <VIcon icon="lucide:sparkles" size="28" />
+                  <VIcon icon="mdi-message-text-outline" size="28" />
                 </AgentPetAvatar>
               </div>
               <div class="agent-assistant-empty__title">{{ t('agentAssistant.emptyTitle') }}</div>
@@ -4034,7 +4082,10 @@ onScopeDispose(() => {
 /* stylelint-disable selector-pseudo-class-no-unknown */
 /* stylelint-disable no-descending-specificity */
 
+/* Vuetify 给 .v-dialog>.v-overlay__content 加了安全区 margin，而 header 与 composer 已各自留过同一段高度；
+   该容器又带 contain:layout，会成为 fixed 面板的包含块，把整块面板下推、底边超出可视区。 */
 .agent-assistant-modal :deep(.agent-assistant-modal__content) {
+  margin-block: 0;
   overflow: hidden;
 }
 
