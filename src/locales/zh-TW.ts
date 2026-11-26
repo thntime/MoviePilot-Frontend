@@ -1739,7 +1739,17 @@ export default {
       checkUpdate: '檢查更新',
     },
     netdiskStatus: {
+      title: '網盤狀態',
+      refresh: '重新整理',
+      refreshResult: '已檢查 {checked} 個帳號：{active} 個正常，{failed} 個異常',
+      refreshFailed: '網盤帳號檢查失敗',
+      allActive: '全部正常',
+      partialError: '部分異常',
+      allError: '全部異常',
+      freeSpace: '剩餘空間',
       averageSpeed: '平均速度',
+      noAccounts: '暫無網盤帳號',
+      accountSummary: '{total} 個帳號，{active} 個正常',
     },
     weeklyOverviewDescription: '最近一週入庫了 {count} 部影片',
     speed: {
@@ -6177,6 +6187,11 @@ export default {
       delete: '刪除帳號',
       importCookieCloud: '從 CookieCloud 匯入',
       login: '登入並儲存',
+      check: '檢查',
+    },
+    check: {
+      done: '檢查完成：{checked} 個帳號，有效 {active}，過期 {expired}，失敗 {failed}',
+      failed: '檢查失敗，請稍後重試',
     },
     methods: {
       cookie: '貼上 Cookie',
@@ -6202,7 +6217,8 @@ export default {
       username: '網盤登入使用者名稱',
       password: '網盤登入密碼，僅用於換取權杖，儲存後不回顯',
     },
-    cookieSteps: '取得步驟：1. 在瀏覽器登入對應網盤網頁版；2. 按 F12 開啟開發者工具並重新整理頁面；3. 在「網路」面板選中任一請求，複製請求標頭中的 Cookie 完整內容貼到此處。',
+    cookieSteps:
+      '取得步驟：1. 在瀏覽器登入對應網盤網頁版；2. 按 F12 開啟開發者工具並重新整理頁面；3. 在「網路」面板選中任一請求，複製請求標頭中的 Cookie 完整內容貼到此處。',
     cookiecloudHint: '按平台網域從已設定的 CookieCloud 一鍵匯入 Cookie，匯入前請先在站點設定中完成 CookieCloud 設定。',
     cookieRequired: '請貼上 Cookie',
     passwordFieldsRequired: '請填寫使用者名稱和密碼',

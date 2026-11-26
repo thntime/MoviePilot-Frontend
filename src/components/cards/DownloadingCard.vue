@@ -359,9 +359,6 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                 <VIcon icon="mdi-alert-outline" size="14" />
                 <span>{{ capacityErrorText }}</span>
               </div>
-              <div v-if="isFailed && errorText" class="downloading-card__error" :title="errorText">
-                {{ errorText }}
-              </div>
 
               <!-- 速率与百分比同一行；状态与剩余时间纵向排列，右侧保留操作按钮。 -->
               <div
@@ -404,7 +401,11 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
                 />
                 <div class="downloading-card__footer">
                   <div class="downloading-card__progress-copy">
-                    <span class="downloading-card__progress-state">
+                    <span
+                      class="downloading-card__progress-state"
+                      :class="{ 'downloading-card__progress-state--has-error': isFailed && !!errorText }"
+                      :title="isFailed && errorText ? errorText : undefined"
+                    >
                       <VIcon :icon="stateIcon" size="14" />
                       {{ stateText }}
                     </span>
@@ -627,15 +628,6 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   color: var(--mp-primary-fg);
 }
 
-.downloading-card__error {
-  overflow: hidden;
-  color: var(--mp-destructive-fg);
-  font-size: 0.72rem;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .downloading-card__meta {
   display: flex;
   min-inline-size: 0;
@@ -800,6 +792,13 @@ const nativeCardMenu = computed<NativeCardMenuBinding>(() => ({
   color: var(--downloading-card-status-color);
   font-weight: 600;
   gap: 0.2rem;
+}
+
+/* 失败原因只放在悬停提示里，状态文字用虚线下划线提示可悬停。 */
+.downloading-card__progress-state--has-error {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.18em;
 }
 
 .downloading-card__progress-remaining {

@@ -141,7 +141,7 @@ describe('SubscribeSeasonDialog', () => {
     expect(seasonRow(0)).toHaveTextContent('3 集')
     expect(within(seasonRow(0)).getByAltText('第 0 季')).toHaveAttribute(
       'src',
-      'https://image.tmdb.org/t/p/w500/images/fallback-poster.jpg',
+      `/api/v1/system/cache/image?url=${encodeURIComponent('https://image.tmdb.org/t/p/w500/images/fallback-poster.jpg')}`,
     )
     await settleRequests()
 
