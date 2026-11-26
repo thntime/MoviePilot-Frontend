@@ -180,7 +180,7 @@ describe('Community medal showcase', () => {
     const link = screen.getByRole('link', { name: '已合并 PR 20' })
     expect(link).toHaveAttribute(
       'href',
-      'https://github.com/jxxghp/MoviePilot-Frontend/pulls?q=is%3Apr%20is%3Amerged%20author%3Aartist',
+      'https://github.com/thntime/MoviePilot-Frontend/pulls?q=is%3Apr%20is%3Amerged%20author%3Aartist',
     )
     expect(screen.queryByRole('link', { name: '已合并 PR 1' })).not.toBeInTheDocument()
     expect(screen.getByText('已合并 PR 1')).toBeVisible()

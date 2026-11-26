@@ -2,7 +2,7 @@
 
 _[中文](README.md) | English_
 
-Frontend project for [MoviePilot](https://github.com/jxxghp/MoviePilot). The minimum supported Node.js version is
+Frontend project for [MoviePilot](https://github.com/thntime/MoviePilot). The minimum supported Node.js version is
 `20.19`; Node.js `24` is recommended.
 
 ## Features

@@ -2,7 +2,7 @@
 
 _中文 | [English](README_EN.md)_
 
-[MoviePilot](https://github.com/jxxghp/MoviePilot) 的前端项目，最低支持 Node.js `20.19`，推荐使用 Node.js `24`。
+[MoviePilot](https://github.com/thntime/MoviePilot) 的前端项目，最低支持 Node.js `20.19`，推荐使用 Node.js `24`。
 
 ## 特性
 

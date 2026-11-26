@@ -66,7 +66,7 @@ function format(value: number) {
 /** 只为白名单官方仓库和已验证账号构造 GitHub 证据链接，不信任外部任意 URL。 */
 function evidenceUrl(repository: string, kind: 'commits' | 'prs'): string | null {
   if (!(OFFICIAL_REPOSITORIES as readonly string[]).includes(repository) || !props.login) return null
-  const base = 'https://github.com/jxxghp/' + encodeURIComponent(repository)
+  const base = 'https://github.com/thntime/' + encodeURIComponent(repository)
   const login = encodeURIComponent(props.login)
   return kind === 'commits'
     ? base + '/commits?author=' + login

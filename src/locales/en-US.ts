@@ -4942,10 +4942,10 @@ export default {
     pluginMarketSetting: {
       title: 'Plugin Market Settings',
       repoUrl: 'Plugin Repository URL',
-      repoPlaceholder: 'Format: https://github.com/jxxghp/MoviePilot-Plugins/,https://github.com/xxxx/xxxxxx/',
+      repoPlaceholder: 'Format: https://github.com/thntime/MoviePilot-Plugins/,https://github.com/xxxx/xxxxxx/',
       repoHint: 'Separate multiple URLs with new lines or commas',
       urlPlaceholder: 'Enter plugin repository URL',
-      textPlaceholder: 'https://github.com/jxxghp/MoviePilot-Plugins/\nhttps://github.com/xxxx/xxxxxx/',
+      textPlaceholder: 'https://github.com/thntime/MoviePilot-Plugins/\nhttps://github.com/xxxx/xxxxxx/',
       repoCountHint: '{count} plugin repository URLs maintained',
       listMode: 'List',
       textMode: 'Text',

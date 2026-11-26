@@ -28,4 +28,4 @@ design/community-medals/rebuild.sh <原图目录>
 
 ## 原图
 
-定稿原图见 Release [art-community-medals-1](https://github.com/jxxghp/MoviePilot-Frontend/releases/tag/art-community-medals-1)。
+定稿原图见 Release [art-community-medals-1](https://github.com/thntime/MoviePilot-Frontend/releases/tag/art-community-medals-1)。

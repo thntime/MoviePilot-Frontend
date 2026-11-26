@@ -1,6 +1,8 @@
 name: Sync Upstream
 
-# 每天定时把上游 v3 分支合并进来。冲突时不推送，改为开 issue 说明哪些文件同步失败。
+# 每天定时把上游 v3 分支合并进来。合并成功先本地跑类型检查，通过才推送；
+# 有冲突时不推送，改为开 issue 说明哪些文件同步失败。
+# 说明：前端仓库没有脚本生成的产物，所以不需要「自动采用上游 + 重新生成」的规则。
 on:
   schedule:
     - cron: '0 19 * * *' # 03:00 Asia/Shanghai
@@ -18,7 +20,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     env:
-      UPSTREAM_REPO: jxxghp/MoviePilot-Frontend
+      UPSTREAM_REPO: thntime/MoviePilot-Frontend
       UPSTREAM_BRANCH: v3
       ISSUE_TITLE: 上游同步失败
     steps:
@@ -28,6 +30,12 @@ jobs:
           ref: v3
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Fetch upstream
         id: fetch
@@ -60,7 +68,7 @@ jobs:
             conflicts=$(git diff --name-only --diff-filter=U | sort)
             {
               echo "conflicts<<EOF"
-              echo "$conflicts"
+              printf '%s\n' "$conflicts"
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
             git merge --abort
@@ -69,8 +77,26 @@ jobs:
           fi
           echo "conflicted=false" >> "$GITHUB_OUTPUT"
 
-      - name: Push merge
+      - name: Verify merged tree
+        id: verify
         if: steps.fetch.outputs.behind != '0' && steps.merge.outputs.conflicted == 'false'
+        run: |
+          set -uo pipefail
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+          status=0
+          yarn install --frozen-lockfile --network-timeout 600000 || status=1
+          yarn typecheck || status=1
+          if [ "$status" -ne 0 ]; then
+            echo "合并结果本地校验未通过，不推送"
+            git reset --hard "${{ steps.fetch.outputs.before }}"
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push merge
+        if: steps.fetch.outputs.behind != '0' && steps.merge.outputs.conflicted == 'false' && steps.verify.outputs.verified == 'true'
         run: git push origin "HEAD:v3"
 
       - name: Report sync failure
@@ -83,7 +109,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${CONFLICTS:-}" ]; then
-            body=$(printf '自动同步上游 `%s` 失败。\n\n- 仓库：`%s`\n- 上游提交：`%s`\n- 运行记录：%s\n\n失败发生在拉取或合并阶段，请查看运行日志。\n' \
+            body=$(printf '自动同步上游 `%s` 失败。\n\n- 仓库：`%s`\n- 上游提交：`%s`\n- 运行记录：%s\n\n失败发生在拉取、合并或合并后校验阶段，未推送任何改动，请查看运行日志。\n' \
               "$UPSTREAM_REPO" "$GITHUB_REPOSITORY" "${UPSTREAM_HEAD:-unknown}" "$RUN_URL")
           else
             files=$(printf '%s\n' "$CONFLICTS" | sed 's/^/- `/; s/$/`/')

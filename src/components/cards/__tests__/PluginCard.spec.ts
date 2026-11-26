@@ -359,8 +359,8 @@ describe('PluginCard lifecycle actions', () => {
       has_update: true,
       update_candidate: {
         source_type: 'official',
-        source_key: 'github:jxxghp/moviepilot-plugins',
-        repo_url: 'https://github.com/jxxghp/MoviePilot-Plugins',
+        source_key: 'github:thntime/moviepilot-plugins',
+        repo_url: 'https://github.com/thntime/MoviePilot-Plugins',
         version: '2.0.0',
         is_bound: false,
       },
@@ -369,7 +369,7 @@ describe('PluginCard lifecycle actions', () => {
     const { container } = await renderWithProviders(PluginCard, { props: { plugin: updatablePlugin } })
 
     await fireEvent.mouseEnter(screen.getByLabelText('有更新'))
-    expect(await screen.findByText('jxxghp/moviepilot-plugins 有新版本 v2.0.0，需要确认更换仓库')).toBeInTheDocument()
+    expect(await screen.findByText('thntime/moviepilot-plugins 有新版本 v2.0.0，需要确认更换仓库')).toBeInTheDocument()
     await fireEvent.click(container.querySelector<HTMLButtonElement>('.v-card .v-btn')!)
     await fireEvent.click(await screen.findByText('查看更新'))
     await waitFor(() => expect(mocks.openSharedDialog).toHaveBeenCalledOnce())
@@ -887,8 +887,8 @@ describe('PluginCard lifecycle actions', () => {
       rating_count: 19,
       update_candidate: {
         source_type: 'official',
-        source_key: 'github:jxxghp/moviepilot-plugins',
-        repo_url: 'https://github.com/jxxghp/MoviePilot-Plugins',
+        source_key: 'github:thntime/moviepilot-plugins',
+        repo_url: 'https://github.com/thntime/MoviePilot-Plugins',
         version: '2.1.0',
         is_bound: false,
       },

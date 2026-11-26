@@ -219,8 +219,8 @@ describe('PluginMarketDetailDialog', () => {
             defaultSourceOptions.candidates[0],
             {
               source_type: 'official',
-              source_key: 'github:jxxghp/moviepilot-plugins',
-              repo_url: 'https://github.com/jxxghp/MoviePilot-Plugins',
+              source_key: 'github:thntime/moviepilot-plugins',
+              repo_url: 'https://github.com/thntime/MoviePilot-Plugins',
               package_generation: 'v3',
               plugin_version: '1.0.0',
             },
@@ -238,7 +238,7 @@ describe('PluginMarketDetailDialog', () => {
     expect(installButton).toBeEnabled()
 
     expect(screen.getByText('官方')).toBeInTheDocument()
-    expect(screen.getAllByRole('radio')[0]).toHaveAttribute('value', 'github:jxxghp/moviepilot-plugins')
+    expect(screen.getAllByRole('radio')[0]).toHaveAttribute('value', 'github:thntime/moviepilot-plugins')
     expect(screen.getAllByRole('radio')[0]).toBeChecked()
     await fireEvent.click(installButton)
 
@@ -246,7 +246,7 @@ describe('PluginMarketDetailDialog', () => {
       expect(mocks.apiPost).toHaveBeenCalledWith(
         'plugin/source/DemoPlugin/install',
         {
-          repo_url: 'https://github.com/jxxghp/MoviePilot-Plugins',
+          repo_url: 'https://github.com/thntime/MoviePilot-Plugins',
           release_version: undefined,
           force: false,
         },
@@ -412,7 +412,7 @@ describe('PluginMarketDetailDialog', () => {
           identity: {
             plugin_id: 'DemoPlugin',
             trusted_source_type: 'official',
-            trusted_source_key: 'github:jxxghp/moviepilot-plugins',
+            trusted_source_key: 'github:thntime/moviepilot-plugins',
             binding_basis: 'official_default',
             payload_source_type: 'local',
             payload_source_key: null,
@@ -421,8 +421,8 @@ describe('PluginMarketDetailDialog', () => {
           candidates: [
             {
               source_type: 'official',
-              source_key: 'github:jxxghp/moviepilot-plugins',
-              repo_url: 'https://github.com/jxxghp/MoviePilot-Plugins',
+              source_key: 'github:thntime/moviepilot-plugins',
+              repo_url: 'https://github.com/thntime/MoviePilot-Plugins',
               package_generation: 'v3',
               plugin_version: '1.0.0',
             },
@@ -435,7 +435,7 @@ describe('PluginMarketDetailDialog', () => {
     const { emitted } = await renderDialog({ ...basePlugin, installed: true, has_update: true })
 
     expect(await screen.findByText('仓库')).toBeInTheDocument()
-    expect(screen.getByText('jxxghp/moviepilot-plugins')).toBeInTheDocument()
+    expect(screen.getByText('thntime/moviepilot-plugins')).toBeInTheDocument()
     expect(screen.getByText('官方')).toBeInTheDocument()
     expect(screen.getByText('运行来源')).toBeInTheDocument()
     expect(screen.getByText('本地')).toBeInTheDocument()
@@ -447,7 +447,7 @@ describe('PluginMarketDetailDialog', () => {
     expect(mocks.confirm).toHaveBeenCalledWith(
       expect.objectContaining({
         icon: 'mdi-source-branch',
-        content: expect.stringContaining('jxxghp/moviepilot-plugins'),
+        content: expect.stringContaining('thntime/moviepilot-plugins'),
         confirmText: '确认更换',
       }),
     )
@@ -475,10 +475,10 @@ describe('PluginMarketDetailDialog', () => {
           identity: {
             plugin_id: 'DemoPlugin',
             trusted_source_type: 'official',
-            trusted_source_key: 'github:jxxghp/moviepilot-plugins',
+            trusted_source_key: 'github:thntime/moviepilot-plugins',
             binding_basis: 'official_default',
             payload_source_type: 'official',
-            payload_source_key: 'github:jxxghp/moviepilot-plugins',
+            payload_source_key: 'github:thntime/moviepilot-plugins',
             revision: 7,
           },
           candidates: [defaultSourceOptions.candidates[0]],
@@ -516,8 +516,8 @@ describe('PluginMarketDetailDialog', () => {
           candidates: [
             {
               source_type: 'official',
-              source_key: 'github:jxxghp/moviepilot-plugins',
-              repo_url: 'https://github.com/jxxghp/MoviePilot-Plugins',
+              source_key: 'github:thntime/moviepilot-plugins',
+              repo_url: 'https://github.com/thntime/MoviePilot-Plugins',
               package_generation: 'v3',
               plugin_version: '1.0.0',
             },
@@ -592,17 +592,17 @@ describe('PluginMarketDetailDialog', () => {
           identity: {
             plugin_id: 'DemoPlugin',
             trusted_source_type: 'official',
-            trusted_source_key: 'github:jxxghp/moviepilot-plugins',
+            trusted_source_key: 'github:thntime/moviepilot-plugins',
             binding_basis: 'official_default',
             payload_source_type: 'official',
-            payload_source_key: 'github:jxxghp/moviepilot-plugins',
+            payload_source_key: 'github:thntime/moviepilot-plugins',
             revision: sourceReadCount === 1 ? 7 : 8,
           },
           candidates: [
             {
               source_type: 'official',
-              source_key: 'github:jxxghp/moviepilot-plugins',
-              repo_url: 'https://github.com/jxxghp/MoviePilot-Plugins',
+              source_key: 'github:thntime/moviepilot-plugins',
+              repo_url: 'https://github.com/thntime/MoviePilot-Plugins',
               package_generation: 'v3',
               plugin_version: '1.0.0',
             },

@@ -18,7 +18,7 @@ const { t, locale } = useI18n()
 const toast = useToast()
 const createConfirm = useConfirm()
 const databaseBackupGuideUrl =
-  'https://github.com/jxxghp/MoviePilot/blob/v3/docs/cli.md#%E6%95%B0%E6%8D%AE%E5%BA%93%E5%A4%87%E4%BB%BD%E5%91%BD%E4%BB%A4'
+  'https://github.com/thntime/MoviePilot/blob/v3/docs/cli.md#%E6%95%B0%E6%8D%AE%E5%BA%93%E5%A4%87%E4%BB%BD%E5%91%BD%E4%BB%A4'
 const backups = ref<DatabaseBackupArtifact[]>([])
 const loading = ref(false)
 const creating = ref(false)

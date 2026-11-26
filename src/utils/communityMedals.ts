@@ -38,7 +38,7 @@ export type MedalArea = Exclude<MedalSpecialty, 'ecosystem'>
 
 /** 编剧单个官方仓库的两类证据；展示时取两者较大值，不相加。 */
 export interface RepositoryFact {
-  /** jxxghp 名下的仓库名，例如 MoviePilot-Frontend */
+  /** thntime 名下的仓库名，例如 MoviePilot-Frontend */
   repository: string
   area: MedalArea
   /** 统计分支上的作者提交数 */
@@ -60,7 +60,7 @@ export interface PluginFact {
   id: string
   /** 插件显示名 */
   name: string
-  /** 插件所在的市场仓库，如 jxxghp/MoviePilot-Plugins */
+  /** 插件所在的市场仓库，如 thntime/MoviePilot-Plugins */
   market: string
   /** movie-pilot.org 统计的累计安装次数 */
   installs: number

@@ -879,8 +879,8 @@ describe('PluginCardListView loading and request ownership', () => {
                 plugin_name: '待更新插件',
                 update_candidate: {
                   source_type: 'official',
-                  source_key: 'github:jxxghp/moviepilot-plugins',
-                  repo_url: 'https://github.com/jxxghp/MoviePilot-Plugins',
+                  source_key: 'github:thntime/moviepilot-plugins',
+                  repo_url: 'https://github.com/thntime/MoviePilot-Plugins',
                   version: '2.0.0',
                   is_bound: false,
                 },
@@ -891,7 +891,7 @@ describe('PluginCardListView loading and request ownership', () => {
     })
 
     await waitFor(() => expect(screen.getByLabelText('update-Shared')).toHaveTextContent('true'))
-    expect(screen.getByLabelText('update-source-Shared')).toHaveTextContent('github:jxxghp/moviepilot-plugins')
+    expect(screen.getByLabelText('update-source-Shared')).toHaveTextContent('github:thntime/moviepilot-plugins')
     await fireEvent.click(screen.getByRole('button', { name: 'refresh-plugin-Shared' }))
 
     await waitFor(() => expect(screen.getByLabelText('update-Shared')).toHaveTextContent('false'))
@@ -1768,8 +1768,8 @@ describe('PluginCardListView search installation', () => {
       candidates: [
         {
           source_type: 'official',
-          source_key: 'github:jxxghp/moviepilot-plugins',
-          repo_url: 'https://github.com/jxxghp/MoviePilot-Plugins',
+          source_key: 'github:thntime/moviepilot-plugins',
+          repo_url: 'https://github.com/thntime/MoviePilot-Plugins',
           package_generation: 'v3',
           plugin_version: '1.0.0',
         },
@@ -1950,8 +1950,8 @@ describe('PluginCardListView search installation', () => {
         candidates: [
           {
             source_type: 'official',
-            source_key: 'github:jxxghp/moviepilot-plugins',
-            repo_url: 'https://github.com/jxxghp/MoviePilot-Plugins',
+            source_key: 'github:thntime/moviepilot-plugins',
+            repo_url: 'https://github.com/thntime/MoviePilot-Plugins',
             package_generation: 'v3',
             plugin_version: '1.0.0',
           },

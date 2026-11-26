@@ -47,7 +47,7 @@ jobs:
       - name: Download Icons
         run: |
           pwd
-          curl -fsSL --retry 3 "https://github.com/jxxghp/MoviePilot-Plugins/archive/refs/heads/main.zip" | busybox unzip -d /tmp -
+          curl -fsSL --retry 3 "https://github.com/thntime/MoviePilot-Plugins/archive/refs/heads/main.zip" | busybox unzip -d /tmp -
           mv /tmp/MoviePilot-Plugins-main/icons public/plugin_icon
           rm -rf /tmp/MoviePilot-Plugins-main
 
