@@ -348,8 +348,22 @@ function valueLabel(value: unknown, field?: string): string {
       )[String(value)],
     )
   if (value === null || value === undefined || value === '') return t('subscriptionActivity.unset')
+  // 播出窗口的字段按业务口径展示：周号翻成星期名，分钟数带单位
+  if (field === 'air_search_weekdays') return weekdayLabel(value)
+  if (field === 'air_search_interval_minutes')
+    return t('subscriptionActivity.minutesValue', { value: String(value) })
   if (Array.isArray(value)) return value.join(', ') || t('subscriptionActivity.unset')
   return String(value)
+}
+
+/** 把兜底周几的 ISO 周号翻成星期名，未知取值原样保留。 */
+function weekdayLabel(value: unknown): string {
+  const items = Array.isArray(value) ? value : String(value).split(',')
+  const labels = items
+    .map(item => String(item).trim())
+    .filter(Boolean)
+    .map(item => (/^[1-7]$/.test(item) ? t(`dialog.subscribeEdit.weekday${item}`) : item))
+  return labels.join(t('subscriptionActivity.listSeparator')) || t('subscriptionActivity.unset')
 }
 
 /** 返回本轮过滤条件，不随当前订阅设置变化而改变历史解释。 */

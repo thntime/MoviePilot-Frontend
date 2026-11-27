@@ -170,6 +170,17 @@ const airSearchMinuteOptions = computed(() => {
   return values.sort().map(minute => ({ title: minute, value: minute }))
 })
 
+// 窗口内重试间隔（分钟）：空值按后端默认 15 分钟显示，改动后写回显式值。
+// 窗口只有 48 小时，按小时级间隔重试会把窗口耗在等下一次到期上，所以这里用分钟。
+const airSearchRetryMinutes = computed<number | null>({
+  get: () => subscribeForm.value.air_search_interval_minutes ?? 15,
+  set: value => {
+    const minutes = Number(value)
+    subscribeForm.value.air_search_interval_minutes =
+      Number.isFinite(minutes) && minutes > 0 ? minutes : null
+  },
+})
+
 // 兜底周几以逗号分隔的 ISO 周号存储，界面按多选数组编辑。
 const airSearchWeekdayValues = computed({
   get: () => (subscribeForm.value.air_search_weekdays ? subscribeForm.value.air_search_weekdays.split(',') : []),
@@ -661,24 +672,38 @@ onMounted(() => {
                       :error-messages="searchIntervalValid ? [] : [t('dialog.subscribeEdit.searchIntervalInvalid')]"
                     />
                   </VCol>
-                  <VCol v-if="searchPeriodMode === 'calendar'" cols="12" md="6">
-                    <div class="d-flex gap-3">
-                      <VSelect
-                        v-model="airSearchHour"
-                        :items="airSearchHourOptions"
-                        :label="t('dialog.subscribeEdit.airSearchHour')"
-                        prepend-inner-icon="mdi-clock-outline"
-                        hide-details
-                        class="flex-grow-1"
-                      />
-                      <VSelect
-                        v-model="airSearchMinute"
-                        :items="airSearchMinuteOptions"
-                        :label="t('dialog.subscribeEdit.airSearchMinute')"
-                        hide-details
-                        class="flex-grow-1"
-                      />
-                    </div>
+                  <VCol v-if="searchPeriodMode === 'calendar'" cols="12">
+                    <VRow>
+                      <VCol cols="12" sm="4">
+                        <VSelect
+                          v-model="airSearchHour"
+                          :items="airSearchHourOptions"
+                          :label="t('dialog.subscribeEdit.airSearchHour')"
+                          prepend-inner-icon="mdi-clock-outline"
+                          hide-details
+                        />
+                      </VCol>
+                      <VCol cols="12" sm="4">
+                        <VSelect
+                          v-model="airSearchMinute"
+                          :items="airSearchMinuteOptions"
+                          :label="t('dialog.subscribeEdit.airSearchMinute')"
+                          hide-details
+                        />
+                      </VCol>
+                      <VCol cols="12" sm="4">
+                        <VTextField
+                          v-model.number="airSearchRetryMinutes"
+                          type="number"
+                          min="1"
+                          max="1440"
+                          step="1"
+                          :label="t('dialog.subscribeEdit.airSearchRetryMinutes')"
+                          :hint="t('dialog.subscribeEdit.airSearchRetryHint')"
+                          persistent-hint
+                        />
+                      </VCol>
+                    </VRow>
                     <div class="text-caption text-medium-emphasis mt-2">
                       {{ t('dialog.subscribeEdit.airSearchTimeHint') }}
                     </div>

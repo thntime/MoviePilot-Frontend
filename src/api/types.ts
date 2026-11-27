@@ -139,6 +139,8 @@ export interface Subscribe {
   air_search_time?: string | null
   /** 拿不到播出日期时兜底触发的周几，逗号分隔的 ISO 周号 1-7；null 或缺省表示没有兜底。 */
   air_search_weekdays?: string | null
+  /** 播出窗口内的重试间隔（分钟）；null 或缺省按 15 分钟默认。 */
+  air_search_interval_minutes?: number | null
   // 订阅ID
   id: number
   // 订阅名称
