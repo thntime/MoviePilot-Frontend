@@ -248,8 +248,17 @@ describe('plugin-shell local runtime', () => {
         audio: {
           startRecord: (opts?: Record<string, unknown>) => Promise<{ recordingId: string }>
           stopRecord: () => Promise<{ recordingId: string; base64?: string }>
-          play: (opts: Record<string, unknown>) => Promise<{ playbackId: string }>
+          play: (opts: Record<string, unknown>) => Promise<{ playbackId: string; spectrumActive?: boolean }>
           stop: () => Promise<{ stopped: boolean }>
+          getSystemVolume?: () => Promise<{ volume: number; muted: boolean; currentSteps?: number; maxSteps?: number }>
+          setSystemVolume?: (
+            volOrOpts: number | { volume: number; showUI?: boolean },
+          ) => Promise<{ volume: number; muted: boolean }>
+          setSpectrum?: (opts: {
+            enabled: boolean
+            bands?: number
+            intervalMs?: number
+          }) => Promise<{ spectrumActive: boolean; bands: number; intervalMs: number }>
           onEvent: (fn: (ev: { event: string; data: Record<string, unknown> }) => void) => () => void
         }
         media: {
@@ -259,6 +268,12 @@ describe('plugin-shell local runtime', () => {
           getCapabilities: () => Promise<{ platform: string; capabilities: string[] }>
           readClipboard: () => Promise<{ text: string }>
           keepAwake: (enabled: boolean) => Promise<{ enabled: boolean }>
+        }
+        widget?: {
+          update: (opts: Record<string, unknown>) => Promise<{ updated: boolean; widgetKey: string }>
+          remove: (widgetKey?: string) => Promise<{ removed: boolean }>
+          list: () => Promise<{ widgets: Array<Record<string, unknown>> }>
+          onEvent: (fn: (ev: { event: 'widget.action'; data: Record<string, unknown> }) => void) => () => void
         }
       }
     }
@@ -300,7 +315,24 @@ describe('plugin-shell local runtime', () => {
             base64: 'AAAA',
           })
         } else if (msg.type === 'audio.play') {
-          reply({ playbackId: 'play_1', state: 'playing', durationMs: 2500 })
+          const spec = msg.payload.spectrum as { enabled?: boolean } | undefined
+          reply({
+            playbackId: 'play_1',
+            state: 'playing',
+            durationMs: 2500,
+            spectrumActive: Boolean(spec?.enabled),
+          })
+        } else if (msg.type === 'audio.getSystemVolume') {
+          reply({ volume: 0.6, muted: false, currentSteps: 9, maxSteps: 15 })
+        } else if (msg.type === 'audio.setSystemVolume') {
+          const targetVol = Number(msg.payload.volume ?? 0.5)
+          reply({ volume: targetVol, muted: targetVol <= 0 })
+        } else if (msg.type === 'audio.setSpectrum') {
+          reply({
+            spectrumActive: Boolean(msg.payload.enabled),
+            bands: Number(msg.payload.bands ?? 64),
+            intervalMs: Number(msg.payload.intervalMs ?? 50),
+          })
         } else if (msg.type === 'audio.stop') {
           reply({ stopped: true })
         } else if (msg.type === 'media.playNative') {
@@ -309,6 +341,14 @@ describe('plugin-shell local runtime', () => {
           reply({ text: 'hello-native' })
         } else if (msg.type === 'device.keepAwake') {
           reply({ enabled: Boolean(msg.payload.enabled) })
+        } else if (msg.type === 'widget.update') {
+          reply({ updated: true, widgetKey: String(msg.payload.widgetKey ?? 'default') })
+        } else if (msg.type === 'widget.remove') {
+          reply({ removed: true })
+        } else if (msg.type === 'widget.list') {
+          reply({
+            widgets: [{ pluginId: 'VoiceDemo', widgetKey: 'status', title: '语音状态', kind: 'custom' }],
+          })
         }
       },
     }
@@ -362,6 +402,9 @@ describe('plugin-shell local runtime', () => {
     expect(capturedHostSdk?.supports('native')).toBe(true)
     expect(capturedHostSdk?.supports('native.audio.record')).toBe(true)
     expect(capturedHostSdk?.supports('native.audio.play')).toBe(true)
+    expect(capturedHostSdk?.supports('native.audio.systemVolume')).toBe(true)
+    expect(capturedHostSdk?.supports('native.audio.spectrum')).toBe(true)
+    expect(capturedHostSdk?.supports('native.widget')).toBe(true)
     expect(window.MoviePilotNativeCapabilities).toBeDefined()
 
     const caps = await capturedHostSdk!.native!.device.getCapabilities()
@@ -387,12 +430,63 @@ describe('plugin-shell local runtime', () => {
     const recStop = await capturedHostSdk!.native!.audio.stopRecord()
     expect(recStop.base64).toBe('AAAA')
 
-    const played = await capturedHostSdk!.native!.audio.play({ base64: 'AAAA', mimeType: 'audio/mp4' })
+    const played = await capturedHostSdk!.native!.audio.play({
+      base64: 'AAAA',
+      mimeType: 'audio/mp4',
+      spectrum: { enabled: true, bands: 64, intervalMs: 50 },
+    })
     expect(played.playbackId).toBe('play_1')
+    expect(played.spectrumActive).toBe(true)
+
+    const sysVol = await capturedHostSdk!.native!.audio.getSystemVolume!()
+    expect(sysVol).toEqual({ volume: 0.6, muted: false, currentSteps: 9, maxSteps: 15 })
+    expect((await capturedHostSdk!.native!.audio.setSystemVolume!(0.4)).volume).toBe(0.4)
+    expect((await capturedHostSdk!.native!.audio.setSystemVolume!({ volume: 0.8, showUI: true })).volume).toBe(0.8)
+    expect(await capturedHostSdk!.native!.audio.setSpectrum!({ enabled: true, bands: 32, intervalMs: 40 })).toEqual({
+      spectrumActive: true,
+      bands: 32,
+      intervalMs: 40,
+    })
+
+    // Host pushes spectrum & systemVolume events
+    window.__mpPluginHostReceive?.({
+      protocol: PLUGIN_HOST_PROTOCOL,
+      major: PLUGIN_HOST_PROTOCOL_MAJOR,
+      type: 'device.event',
+      payload: {
+        event: 'audio.play.spectrum',
+        data: { fft: [120, 80, 40], left: 180, right: 175, positionMs: 1200 },
+      },
+    })
+    window.__mpPluginHostReceive?.({
+      protocol: PLUGIN_HOST_PROTOCOL,
+      major: PLUGIN_HOST_PROTOCOL_MAJOR,
+      type: 'device.event',
+      payload: {
+        event: 'audio.systemVolume',
+        data: { volume: 0.5, muted: false },
+      },
+    })
+    expect(receivedEvents.map(e => e.event)).toEqual([
+      'audio.record.level',
+      'audio.play.spectrum',
+      'audio.systemVolume',
+    ])
+
     expect((await capturedHostSdk!.native!.audio.stop()).stopped).toBe(true)
     expect((await capturedHostSdk!.native!.media.playNative({ storage: 'local', path: '/a.mp3' })).launched).toBe(true)
     expect((await capturedHostSdk!.native!.device.readClipboard()).text).toBe('hello-native')
     expect((await capturedHostSdk!.native!.device.keepAwake(true)).enabled).toBe(true)
+    expect(
+      await capturedHostSdk!.native!.widget!.update({
+        widgetKey: 'status',
+        title: '语音状态',
+        kind: 'custom',
+        layout: { type: 'column', children: [{ type: 'text', text: '在线' }] },
+      }),
+    ).toEqual({ updated: true, widgetKey: 'status' })
+    expect((await capturedHostSdk!.native!.widget!.list()).widgets).toHaveLength(1)
+    expect((await capturedHostSdk!.native!.widget!.remove('status')).removed).toBe(true)
 
     // Unmount clears device event listeners
     window.__mpPluginHostReceive?.({
@@ -410,7 +504,246 @@ describe('plugin-shell local runtime', () => {
         data: { playbackId: 'play_1' },
       },
     })
-    expect(receivedEvents).toHaveLength(1)
+    expect(receivedEvents).toHaveLength(3)
+
+    wrapper.unmount()
+  })
+
+  it('delegates nav.back with 300ms timeout protection, protects __mpPluginHostReceive from overwrite, and supports close/minimize/capsule APIs', async () => {
+    const capsuleClicks: string[] = []
+    type ExtendedShellSdk = {
+      supports: (cap: string) => boolean
+      api: { get: <T = unknown>(url: string) => Promise<T> }
+      navigation?: {
+        onBack?: (handler: () => boolean | Promise<boolean>) => () => void
+        close?: () => void
+      }
+      shell?: {
+        close?: () => void
+        minimize?: (opts?: Record<string, unknown>) => Promise<{ minimized: boolean; overlayGranted?: boolean }>
+        updateCapsule?: (state: Record<string, unknown>) => void
+        restore?: () => Promise<{ restored: boolean }>
+        onCapsuleAction?: (cb: (ev: { actionId: string }) => void) => () => void
+      }
+    }
+    const sdkHolder: { current: ExtendedShellSdk | null } = { current: null }
+
+    window.__mpAndroidPluginHostV2 = {
+      postMessage: raw => {
+        const msg = JSON.parse(raw) as WebToHostEnvelope
+        sentMessages.push(msg)
+        const requestId = typeof msg.payload.requestId === 'string' ? msg.payload.requestId : ''
+        if (!requestId) return
+        if (msg.type === 'api.request') {
+          window.__mpPluginHostReceive?.({
+            protocol: PLUGIN_HOST_PROTOCOL,
+            major: PLUGIN_HOST_PROTOCOL_MAJOR,
+            type: 'bridge.response',
+            payload: {
+              requestId,
+              ok: true,
+              data: { status: 200, body: { survivedOverwrite: true } },
+            },
+          })
+        } else if (msg.type === 'plugin.minimize') {
+          window.__mpPluginHostReceive?.({
+            protocol: PLUGIN_HOST_PROTOCOL,
+            major: PLUGIN_HOST_PROTOCOL_MAJOR,
+            type: 'bridge.response',
+            payload: {
+              requestId,
+              ok: true,
+              data: { minimized: true, overlaySupported: true, overlayGranted: true },
+            },
+          })
+        } else if (msg.type === 'plugin.restore') {
+          window.__mpPluginHostReceive?.({
+            protocol: PLUGIN_HOST_PROTOCOL,
+            major: PLUGIN_HOST_PROTOCOL_MAJOR,
+            type: 'bridge.response',
+            payload: {
+              requestId,
+              ok: true,
+              data: { restored: true },
+            },
+          })
+        }
+      },
+    }
+
+    const MusicLikePlugin = defineComponent({
+      name: 'MusicLikePlugin',
+      props: { hostSdk: Object },
+      setup(props) {
+        const sdk = props.hostSdk as ExtendedShellSdk | null
+        sdkHolder.current = sdk
+        sdk?.shell?.onCapsuleAction?.(ev => {
+          capsuleClicks.push(ev.actionId)
+        })
+        return () => h('div', { class: 'music-plugin-root' }, 'music-ready')
+      },
+    })
+    remoteMocks.getFederationRemote.mockResolvedValue({ default: MusicLikePlugin })
+
+    const wrapper = mount(PluginShellHost, {
+      global: {
+        plugins: [vuetify],
+        components: {
+          VDialogCloseBtn: defineComponent({
+            name: 'ShellDialogCloseBtn',
+            setup(_, { attrs }) {
+              return () => h(VIcon, { ...attrs, icon: 'ri-close-line' })
+            },
+          }),
+        },
+      },
+      attachTo: document.body,
+    })
+
+    window.__mpPluginHostReceive?.({
+      protocol: PLUGIN_HOST_PROTOCOL,
+      major: PLUGIN_HOST_PROTOCOL_MAJOR,
+      type: 'plugin.mount',
+      payload: {
+        mountId: 'm-music',
+        pluginId: 'MusicBox',
+        pluginName: '音乐盒',
+        surface: 'dataPage',
+        remoteEntryUrl: '/plugin-remote/MusicBox/1.0.0/assets/remoteEntry.js',
+        visualTokens: getDefaultVisualTokens(),
+      },
+    })
+    await new Promise(resolve => setTimeout(resolve, 40))
+    await nextTick()
+
+    const sdk = sdkHolder.current!
+    expect(sdk.supports('navigation.back')).toBe(true)
+    expect(sdk.supports('navigation.close')).toBe(true)
+    expect(sdk.supports('shell.close')).toBe(true)
+    expect(sdk.supports('shell.minimize')).toBe(true)
+    expect(sdk.supports('native.audio.lyrics')).toBe(true)
+    expect(sdk.supports('native.audio.customActions')).toBe(true)
+
+    // 1. 模拟插件意外覆盖 window.__mpPluginHostReceive，验证 api.request 响应不会被截走
+    const externalCaptured: unknown[] = []
+    window.__mpPluginHostReceive = raw => {
+      externalCaptured.push(raw)
+    }
+    const apiRes = await sdk.api.get<{ survivedOverwrite: boolean }>('plugin/MusicBox/ping')
+    expect(apiRes.survivedOverwrite).toBe(true)
+    expect(externalCaptured).toHaveLength(0)
+
+    // 2. 注册返回键委托：消费一次内部返回 -> 再返回 false 退回宿主 -> 超时 300ms 自动保护放行
+    let detailOpen = true
+    const offBack = sdk.navigation!.onBack!(() => {
+      if (detailOpen) {
+        detailOpen = false
+        return Promise.resolve(true)
+      }
+      return false
+    })
+
+    sentMessages.length = 0
+    window.__mpPluginHostReceive?.({
+      protocol: PLUGIN_HOST_PROTOCOL,
+      major: PLUGIN_HOST_PROTOCOL_MAJOR,
+      type: 'nav.back',
+      payload: { mountId: 'm-music' },
+    })
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(sentMessages.find(m => m.type === 'nav.backResult')?.payload).toEqual({
+      mountId: 'm-music',
+      handled: true,
+    })
+
+    sentMessages.length = 0
+    window.__mpPluginHostReceive?.({
+      protocol: PLUGIN_HOST_PROTOCOL,
+      major: PLUGIN_HOST_PROTOCOL_MAJOR,
+      type: 'nav.back',
+      payload: { mountId: 'm-music' },
+    })
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(sentMessages.find(m => m.type === 'nav.backResult')?.payload).toEqual({
+      mountId: 'm-music',
+      handled: false,
+    })
+    offBack()
+
+    // 挂起不 resolve 的 Promise 在 300ms 超时保护后不卡死返回键
+    sdk.navigation!.onBack!(() => new Promise<boolean>(() => {}))
+    sentMessages.length = 0
+    window.__mpPluginHostReceive?.({
+      protocol: PLUGIN_HOST_PROTOCOL,
+      major: PLUGIN_HOST_PROTOCOL_MAJOR,
+      type: 'nav.back',
+      payload: { mountId: 'm-music' },
+    })
+    await new Promise(resolve => setTimeout(resolve, 340))
+    expect(sentMessages.find(m => m.type === 'nav.backResult')?.payload).toEqual({
+      mountId: 'm-music',
+      handled: false,
+    })
+
+    // 3. 最小化胶囊与快捷按钮回推 + 官方关闭接口
+    const minRes = await sdk.shell!.minimize!({
+      title: '晴天 - 周杰伦',
+      mode: 'mini',
+      keepOutsideApp: true,
+      actions: [{ id: 'togglePlay', label: '暂停' }],
+    })
+    expect(minRes.minimized).toBe(true)
+    expect(minRes.overlayGranted).toBe(true)
+
+    sdk.shell!.updateCapsule!({ subtitle: '故事的小黄花', isPlaying: true })
+    expect(sentMessages.some(m => m.type === 'plugin.capsule.update' && m.payload.subtitle === '故事的小黄花')).toBe(
+      true,
+    )
+
+    window.__mpPluginHostReceive?.({
+      protocol: PLUGIN_HOST_PROTOCOL,
+      major: PLUGIN_HOST_PROTOCOL_MAJOR,
+      type: 'capsule.action',
+      payload: { actionId: 'togglePlay' },
+    })
+    expect(capsuleClicks).toEqual(['togglePlay'])
+
+    expect((await sdk.shell!.restore!()).restored).toBe(true)
+
+    sentMessages.length = 0
+    sdk.shell!.close!()
+    expect(sentMessages.some(m => m.type === 'plugin.close' && m.payload.mountId === 'm-music')).toBe(true)
+
+    // 4. plugin.unmount 自动清空已注册的 onBack、胶囊监听并抑制 Web MediaSession
+    Object.defineProperty(navigator, 'mediaSession', {
+      configurable: true,
+      value: {
+        metadata: { title: 'stale-web-session' },
+        playbackState: 'playing',
+        setActionHandler: vi.fn(),
+      },
+    })
+    sdk.navigation!.onBack!(() => true)
+    window.__mpPluginHostReceive?.({
+      protocol: PLUGIN_HOST_PROTOCOL,
+      major: PLUGIN_HOST_PROTOCOL_MAJOR,
+      type: 'plugin.unmount',
+      payload: { mountId: 'm-music' },
+    })
+    const mockMs = (navigator as unknown as { mediaSession: { metadata: unknown; playbackState: string } }).mediaSession
+    expect(mockMs.metadata).toBeNull()
+    expect(mockMs.playbackState).toBe('none')
+    mockMs.metadata = { title: 'hijack' }
+    expect(mockMs.metadata).toBeNull()
+    sentMessages.length = 0
+    window.__mpPluginHostReceive?.({
+      protocol: PLUGIN_HOST_PROTOCOL,
+      major: PLUGIN_HOST_PROTOCOL_MAJOR,
+      type: 'nav.back',
+      payload: { mountId: 'm-music' },
+    })
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(sentMessages.find(m => m.type === 'nav.backResult')?.payload.handled).toBe(false)
 
     wrapper.unmount()
   })

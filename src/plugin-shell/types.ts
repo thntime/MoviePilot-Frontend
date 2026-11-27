@@ -137,6 +137,7 @@ export interface HostToWebEnvelope {
     | 'safeArea.update'
     | 'nav.back'
     | 'host.action'
+    | 'capsule.action'
     | 'bridge.response'
     | 'device.event'
   payload?: Record<string, unknown>
@@ -147,6 +148,9 @@ export type WebToHostMessageType =
   | 'plugin.mounted'
   | 'plugin.error'
   | 'plugin.close'
+  | 'plugin.minimize'
+  | 'plugin.capsule.update'
+  | 'plugin.restore'
   | 'plugin.action'
   | 'api.request'
   | 'api.abort'
@@ -183,10 +187,16 @@ export type WebToHostMessageType =
   | 'audio.seek'
   | 'audio.setRate'
   | 'audio.setVolume'
+  | 'audio.getSystemVolume'
+  | 'audio.setSystemVolume'
+  | 'audio.setSpectrum'
   | 'audio.status'
   | 'audio.setNowPlaying'
   | 'audio.clearNowPlaying'
   | 'media.playNative'
+  | 'widget.update'
+  | 'widget.remove'
+  | 'widget.list'
 
 export interface WebToHostEnvelope {
   protocol: typeof PLUGIN_HOST_PROTOCOL
