@@ -85,6 +85,8 @@ const subscribeForm = ref<Subscribe>({
   media_id: undefined,
   state: '',
   search_interval: null,
+  air_search_time: null,
+  air_search_weekdays: null,
   last_update: '',
   username: '',
   sites: [],
@@ -97,11 +99,28 @@ const subscribeForm = ref<Subscribe>({
   episode_group: '',
 })
 
-// 切换为系统周期时显式提交 null，确保覆盖已保存的独立周期。
-const customSearchInterval = computed({
-  get: () => subscribeForm.value.search_interval != null,
+// 搜索周期三态：跟随系统、自定义小时间隔、按播出日历。
+// 三态互斥，切换时清掉另外两态的残留值，避免保存出「既自定义间隔又按日历」的混合配置。
+const searchPeriodMode = computed({
+  get: () => {
+    if (subscribeForm.value.air_search_time) return 'calendar'
+    return subscribeForm.value.search_interval != null ? 'custom' : 'system'
+  },
   set: value => {
-    subscribeForm.value.search_interval = value ? 24 : null
+    if (value === 'custom') {
+      subscribeForm.value.search_interval = subscribeForm.value.search_interval ?? 24
+      subscribeForm.value.air_search_time = null
+      subscribeForm.value.air_search_weekdays = null
+      return
+    }
+    if (value === 'calendar') {
+      subscribeForm.value.search_interval = null
+      subscribeForm.value.air_search_time = subscribeForm.value.air_search_time || '11:00'
+      return
+    }
+    subscribeForm.value.search_interval = null
+    subscribeForm.value.air_search_time = null
+    subscribeForm.value.air_search_weekdays = null
   },
 })
 
@@ -110,6 +129,31 @@ const searchIntervalValid = computed(() => {
   const interval = subscribeForm.value.search_interval
   return interval == null || (Number.isInteger(Number(interval)) && Number(interval) >= 1 && Number(interval) <= 8760)
 })
+
+// 播出时刻必须是 24 小时制 HH:MM；接口用同一正则拒绝非法值。
+const airSearchTimeValid = computed(() => {
+  const value = subscribeForm.value.air_search_time
+  return !value || /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
+})
+
+// 兜底周几以逗号分隔的 ISO 周号存储，界面按多选数组编辑。
+const airSearchWeekdayValues = computed({
+  get: () => (subscribeForm.value.air_search_weekdays ? subscribeForm.value.air_search_weekdays.split(',') : []),
+  set: value => {
+    subscribeForm.value.air_search_weekdays = value.length ? value.join(',') : null
+  },
+})
+
+// 兜底周几选项，1 为周一。
+const airSearchWeekdayOptions = computed(() =>
+  [1, 2, 3, 4, 5, 6, 7].map(value => ({
+    title: t(`dialog.subscribeEdit.weekday${value}`),
+    value: String(value),
+  })),
+)
+
+// 搜索周期整体可用性：间隔与时刻各自校验，任一项不合法都不允许保存。
+const searchPeriodValid = computed(() => searchIntervalValid.value && airSearchTimeValid.value)
 
 // 提示框
 const $toast = useToast()
@@ -217,7 +261,7 @@ const filterRuleGroupOptions = computed(() => {
 
 // 调用API修改订阅
 async function updateSubscribeInfo() {
-  if (!searchIntervalValid.value) return
+  if (!searchPeriodValid.value) return
   const displayName = getSubscribeDisplayName()
   try {
     await api.put<null>('subscribe/', subscribeForm.value, { feedback: 'silent' })
@@ -237,7 +281,7 @@ async function updateSubscribeInfo() {
 
 // 设置用户设置的默认订阅规则
 async function saveDefaultSubscribeConfig() {
-  if (!canAdmin.value || !searchIntervalValid.value) return
+  if (!canAdmin.value || !searchPeriodValid.value) return
 
   const typeName = getDefaultSubscribeTypeName()
   try {
@@ -558,12 +602,13 @@ onMounted(() => {
                   </VCol>
                 </VRow>
                 <VRow>
-                  <VCol cols="12" :md="customSearchInterval ? 6 : 12">
+                  <VCol cols="12" :md="searchPeriodMode === 'system' ? 12 : 6">
                     <VSelect
-                      v-model="customSearchInterval"
+                      v-model="searchPeriodMode"
                       :items="[
-                        { title: t('dialog.subscribeEdit.searchIntervalSystem'), value: false },
-                        { title: t('dialog.subscribeEdit.searchIntervalCustom'), value: true },
+                        { title: t('dialog.subscribeEdit.searchIntervalSystem'), value: 'system' },
+                        { title: t('dialog.subscribeEdit.searchIntervalCustom'), value: 'custom' },
+                        { title: t('dialog.subscribeEdit.searchIntervalCalendar'), value: 'calendar' },
                       ]"
                       :label="t('dialog.subscribeEdit.searchInterval')"
                       :hint="t('dialog.subscribeEdit.searchIntervalHint')"
@@ -571,7 +616,7 @@ onMounted(() => {
                       prepend-inner-icon="mdi-timer-outline"
                     />
                   </VCol>
-                  <VCol v-if="customSearchInterval" cols="12" md="6">
+                  <VCol v-if="searchPeriodMode === 'custom'" cols="12" md="6">
                     <VTextField
                       v-model.number="subscribeForm.search_interval"
                       type="number"
@@ -580,6 +625,31 @@ onMounted(() => {
                       step="1"
                       :label="t('dialog.subscribeEdit.searchIntervalHours')"
                       :error-messages="searchIntervalValid ? [] : [t('dialog.subscribeEdit.searchIntervalInvalid')]"
+                    />
+                  </VCol>
+                  <VCol v-if="searchPeriodMode === 'calendar'" cols="12" md="6">
+                    <VTextField
+                      v-model="subscribeForm.air_search_time"
+                      type="time"
+                      :label="t('dialog.subscribeEdit.airSearchTime')"
+                      :hint="t('dialog.subscribeEdit.airSearchTimeHint')"
+                      persistent-hint
+                      :error-messages="airSearchTimeValid ? [] : [t('dialog.subscribeEdit.airSearchTimeInvalid')]"
+                    />
+                  </VCol>
+                </VRow>
+                <VRow v-if="searchPeriodMode === 'calendar'">
+                  <VCol cols="12">
+                    <VSelect
+                      v-model="airSearchWeekdayValues"
+                      :items="airSearchWeekdayOptions"
+                      multiple
+                      chips
+                      clearable
+                      :label="t('dialog.subscribeEdit.airSearchWeekdays')"
+                      :hint="t('dialog.subscribeEdit.airSearchWeekdaysHint')"
+                      persistent-hint
+                      prepend-inner-icon="mdi-calendar-week"
                     />
                   </VCol>
                 </VRow>
@@ -745,7 +815,7 @@ onMounted(() => {
         <VBtn
           color="primary"
           variant="flat"
-          :disabled="!searchIntervalValid"
+          :disabled="!searchPeriodValid"
           @click="props.default ? saveDefaultSubscribeConfig() : updateSubscribeInfo()"
           prepend-icon="mdi-content-save"
           class="px-5"

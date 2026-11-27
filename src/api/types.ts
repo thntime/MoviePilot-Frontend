@@ -135,6 +135,10 @@ export interface ManualScrapeOptions {
 export interface Subscribe {
   /** 独立定时搜索间隔（小时）；null 或缺省跟随系统。 */
   search_interval?: number | null
+  /** 播出日当天的更新时刻 HH:MM；null 或缺省表示不按播出窗口限制定时搜索。 */
+  air_search_time?: string | null
+  /** 拿不到播出日期时兜底触发的周几，逗号分隔的 ISO 周号 1-7；null 或缺省表示没有兜底。 */
+  air_search_weekdays?: string | null
   // 订阅ID
   id: number
   // 订阅名称
