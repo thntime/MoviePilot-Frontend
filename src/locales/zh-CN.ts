@@ -5189,6 +5189,8 @@ export default {
       searchIntervalHint: '仅在开启订阅定时搜索时生效；手动搜索和 RSS 刷新不受影响。',
       searchIntervalInvalid: '请输入 1–8760 的整数小时数',
       airSearchTime: '更新时刻',
+      airSearchHour: '时',
+      airSearchMinute: '分',
       airSearchTimeHint: '播出日当天到这个时刻之后才开始定时搜索；按服务器本地时间计算。',
       airSearchTimeInvalid: '请输入 00:00–23:59 的时刻',
       airSearchWeekdays: '兜底周几',

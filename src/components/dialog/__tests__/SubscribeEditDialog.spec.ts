@@ -145,6 +145,31 @@ describe('SubscribeEditDialog', () => {
     expect(updated.mock.calls[1][0]).toMatchObject({ search_interval: null })
   })
 
+  it('saves the release time picked from the calendar hour and minute selects', async () => {
+    const updated = vi.fn()
+    server.use(
+      subscribeDetailsHandler(
+        822,
+        createSubscribe({ id: 822, name: '播出日历测试', search_interval: null, type: '电视剧' }),
+      ),
+      updateSubscribeHandler({ success: true }, 200, updated),
+    )
+    useDialogOptions()
+    const user = userEvent.setup()
+    await renderDialog({ subid: 822 })
+    await screen.findByText('播出日历测试')
+    await user.click(screen.getByLabelText('搜索周期'))
+    await user.click(await screen.findByRole('option', { name: '按播出日历' }))
+    // 切到日历态时时刻落默认值，随后时、分两个下拉共同写回同一个字段
+    await user.click(screen.getByLabelText('时'))
+    await user.click(await screen.findByRole('option', { name: '11' }))
+    await user.click(screen.getByLabelText('分'))
+    await user.click(await screen.findByRole('option', { name: '30' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(updated).toHaveBeenCalledOnce())
+    expect(updated.mock.calls[0][0]).toMatchObject({ air_search_time: '11:30', search_interval: null })
+  })
+
   it('loads a saved custom interval and prevents invalid values from being submitted', async () => {
     const updated = vi.fn()
     server.use(

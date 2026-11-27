@@ -5337,6 +5337,8 @@ export default {
         'Requires scheduled subscription search to be enabled. Manual searches and RSS refreshes are unaffected.',
       searchIntervalInvalid: 'Enter a whole number of hours from 1 to 8760',
       airSearchTime: 'Release time',
+      airSearchHour: 'Hour',
+      airSearchMinute: 'Minute',
       airSearchTimeHint:
         'Scheduled search starts only after this time on the air date; uses the server local clock.',
       airSearchTimeInvalid: 'Enter a time between 00:00 and 23:59',

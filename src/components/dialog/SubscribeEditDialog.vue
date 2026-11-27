@@ -136,6 +136,40 @@ const airSearchTimeValid = computed(() => {
   return !value || /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
 })
 
+// 更新时刻拆成时、分两个下拉：原生 time 输入框在深色主题下会露出浏览器自带的控件外观，
+// 与卡片里的其它下拉不一致；两个下拉能保证与主题同色，也省掉逐字键入。
+const airSearchHour = computed({
+  get: () => subscribeForm.value.air_search_time?.slice(0, 2) ?? null,
+  set: hour => {
+    const minute = subscribeForm.value.air_search_time?.slice(3, 5) ?? '00'
+    subscribeForm.value.air_search_time = hour ? `${hour}:${minute}` : null
+  },
+})
+
+const airSearchMinute = computed({
+  get: () => subscribeForm.value.air_search_time?.slice(3, 5) ?? null,
+  set: minute => {
+    const hour = subscribeForm.value.air_search_time?.slice(0, 2) ?? '00'
+    subscribeForm.value.air_search_time = minute ? `${hour}:${minute}` : null
+  },
+})
+
+// 小时按 24 小时制全量列出，两位补零与后端 HH:MM 形态一致。
+const airSearchHourOptions = computed(() =>
+  Array.from({ length: 24 }, (_, hour) => {
+    const value = String(hour).padStart(2, '0')
+    return { title: value, value }
+  }),
+)
+
+// 分钟以 5 分钟为档；已存的非整档值动态补进选项，避免下拉显示为空把原值吃掉。
+const airSearchMinuteOptions = computed(() => {
+  const values = Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, '0'))
+  const current = subscribeForm.value.air_search_time?.slice(3, 5)
+  if (current && !values.includes(current)) values.push(current)
+  return values.sort().map(minute => ({ title: minute, value: minute }))
+})
+
 // 兜底周几以逗号分隔的 ISO 周号存储，界面按多选数组编辑。
 const airSearchWeekdayValues = computed({
   get: () => (subscribeForm.value.air_search_weekdays ? subscribeForm.value.air_search_weekdays.split(',') : []),
@@ -628,14 +662,26 @@ onMounted(() => {
                     />
                   </VCol>
                   <VCol v-if="searchPeriodMode === 'calendar'" cols="12" md="6">
-                    <VTextField
-                      v-model="subscribeForm.air_search_time"
-                      type="time"
-                      :label="t('dialog.subscribeEdit.airSearchTime')"
-                      :hint="t('dialog.subscribeEdit.airSearchTimeHint')"
-                      persistent-hint
-                      :error-messages="airSearchTimeValid ? [] : [t('dialog.subscribeEdit.airSearchTimeInvalid')]"
-                    />
+                    <div class="d-flex gap-3">
+                      <VSelect
+                        v-model="airSearchHour"
+                        :items="airSearchHourOptions"
+                        :label="t('dialog.subscribeEdit.airSearchHour')"
+                        prepend-inner-icon="mdi-clock-outline"
+                        hide-details
+                        class="flex-grow-1"
+                      />
+                      <VSelect
+                        v-model="airSearchMinute"
+                        :items="airSearchMinuteOptions"
+                        :label="t('dialog.subscribeEdit.airSearchMinute')"
+                        hide-details
+                        class="flex-grow-1"
+                      />
+                    </div>
+                    <div class="text-caption text-medium-emphasis mt-2">
+                      {{ t('dialog.subscribeEdit.airSearchTimeHint') }}
+                    </div>
                   </VCol>
                 </VRow>
                 <VRow v-if="searchPeriodMode === 'calendar'">
