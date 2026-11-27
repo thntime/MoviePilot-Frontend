@@ -20,7 +20,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     env:
-      UPSTREAM_REPO: thntime/MoviePilot-Frontend
+      UPSTREAM_REPO: jxxghp/MoviePilot-Frontend
       UPSTREAM_BRANCH: v3
       ISSUE_TITLE: 上游同步失败
     steps:
